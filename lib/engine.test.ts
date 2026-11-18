@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { planBreaks, requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, assignRange, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
-import { analyzeCover, assignCover, suggestMover } from "./cover";
+import { analyzeCover, applyBreakChange, assignCover, suggestMover } from "./cover";
 import { DayState, DEFAULT_SETTINGS, Position, roleName } from "./types";
 
 const h = (hr: number, m = 0) => hr * 60 + m;
@@ -244,6 +244,44 @@ describe("no automatic cover", () => {
     for (const s of redealt.shifts.filter((x) => !x.role && x.id !== holder.id && x.start <= h(14, 5) && h(14, 30) < x.end)) {
       expect(redealt.cells[cellKey(s.id, h(14, 5))].pos).toBe(redealt.cells[cellKey(s.id, h(14, 30))].pos);
     }
+  });
+});
+
+describe("sending someone on break with the cover you picked", () => {
+  it("puts the chosen person on the position and keeps them there after the board fills in", () => {
+    const day = quietDay();
+    const c = h(14);
+    const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, c)]?.pos === "dungeon" && s.start <= c && c < s.end)!;
+    const probe = placeBreak(day, holder.id, c, 20);
+    const a = analyzeCover(probe.day, S, holder.id, probe.breakId!);
+    const picked = a.options.find((o) => !o.recommended)!; // not GDS's suggestion: the lead's own choice
+
+    // the same steps the Assign dialog and the break timer run
+    let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, c, 20), picked.shift.id);
+    next = { ...next, cells: autoFill(next, S, Infinity) }; // the "fill" pass that follows in the app
+
+    for (const t of [h(14), h(14, 10), h(14, 15)]) {
+      expect(next.cells[cellKey(picked.shift.id, t)]).toMatchObject({ pos: "dungeon", pinned: true });
+      expect(staffAt(next, S, t).dungeon.map((s) => s.id)).toEqual([picked.shift.id]);
+    }
+    // and it ends when the break does
+    expect(next.cells[cellKey(picked.shift.id, h(14, 20))]?.cover).toBeUndefined();
+  });
+
+  it("does the same when the break is moved to a new time", () => {
+    const day = quietDay();
+    const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, h(13, 30))]?.pos === "dungeon" && s.start <= h(13, 30))!;
+    const first = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, h(13, 30), 20), null);
+    const probe = placeBreak(first, holder.id, h(14), 20);
+    const a = analyzeCover(probe.day, S, holder.id, probe.breakId!);
+    const picked = a.options[0];
+    const moved = applyBreakChange(first, S, (d) => placeBreak(d, holder.id, h(14), 20), picked.shift.id);
+    // the holder rotates at 2:00, so the position to cover is whatever they hold at the new time
+    expect(a.position).not.toBeNull();
+    expect(moved.cells[cellKey(picked.shift.id, h(14, 5))]).toMatchObject({ pos: a.position, pinned: true });
+    // the cover at the old time is gone
+    expect(Object.values(moved.cells).filter((c) => c.cover).length).toBeGreaterThan(0);
+    expect(moved.cells[cellKey(picked.shift.id, h(13, 35))]?.cover).toBeUndefined();
   });
 });
 
