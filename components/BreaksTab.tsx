@@ -235,10 +235,10 @@ function ShiftRows({ ctx, shift }: { ctx: Ctx; shift: Shift }) {
     return (
       <tr className="group-start">
         <td className="name">{shift.name}</td>
-        <td colSpan={9} className="muted">
+        <td colSpan={9} className="muted wide">
           No breaks required
         </td>
-        <td>
+        <td className="actions">
           <button className="btn small" onClick={() => mutate((d) => addBreak(d, shift.id))}>
             + Break
           </button>
@@ -285,8 +285,8 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
         )}
         {shift.sentHomeAt != null && <small>Sent home {fmt(shift.sentHomeAt)}</small>}
       </td>
-      <td>{fmt(shift.start)}</td>
-      <td>
+      <td data-label="Clock in">{fmt(shift.start)}</td>
+      <td data-label="Break length" className="len">
         <input
           type="number"
           className="field compact"
@@ -299,7 +299,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
         />{" "}
         <span className="muted">min</span>
       </td>
-      <td>
+      <td data-label="Planned start">
         <input
           type="time"
           className="field compact"
@@ -316,7 +316,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           </span>
         )}
       </td>
-      <td>
+      <td data-label="Break start">
         <input
           type="time"
           className="field compact"
@@ -325,7 +325,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           onChange={(e) => change({ start: time(e.target.value) })}
         />
       </td>
-      <td>
+      <td data-label="Break end">
         <input
           type="time"
           className="field compact"
@@ -339,28 +339,26 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           </small>
         )}
       </td>
-      <td>{fmt(shift.end)}</td>
-      <td>
+      <td data-label="Clock out">{fmt(shift.end)}</td>
+      <td data-label="Emp. initials">
         <input
-          className="field compact"
-          style={{ width: 64 }}
+          className="field compact init"
           maxLength={4}
           value={brk.empInitials}
           aria-label={`Employee initials for ${shift.name}`}
           onChange={(e) => text({ empInitials: e.target.value.toUpperCase() })}
         />
       </td>
-      <td>
+      <td data-label="Lead initials">
         <input
-          className="field compact"
-          style={{ width: 64 }}
+          className="field compact init"
           maxLength={4}
           value={brk.leadInitials}
           aria-label={`Lead initials for ${shift.name}`}
           onChange={(e) => text({ leadInitials: e.target.value.toUpperCase() })}
         />
       </td>
-      <td>
+      <td data-label="Notes" className="wide">
         <input
           className="field compact"
           value={brk.notes}
@@ -368,7 +366,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           onChange={(e) => text({ notes: e.target.value })}
         />
       </td>
-      <td style={{ whiteSpace: "nowrap" }}>
+      <td className="actions" style={{ whiteSpace: "nowrap" }}>
         {status === "active" ? (
           <button
             className="btn primary small"

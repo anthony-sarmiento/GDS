@@ -32,8 +32,19 @@ const BRUSHES: { id: Brush; label: string; key: string; cls: string }[] = [
   { id: "erase", label: "Erase", key: "0", cls: "brush-erase" },
 ];
 
-const ZOOMS = [2, 3, 4, 6]; // pixels per minute
-const LABEL_W = 200;
+const ZOOMS = [1.5, 2, 3, 4, 6]; // pixels per minute
+
+/** Phone-sized screen: narrower name column, tighter default zoom. */
+function useCompact(): boolean {
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 700px)");
+    const on = () => setCompact(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return compact;
+}
 
 export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
   const { day, now, mutate } = ctx;
@@ -305,8 +316,10 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
   const g = settings.gridMinutes;
   const crew = rotating(day.shifts);
 
+  const compact = useCompact();
+  const LABEL_W = compact ? 92 : 200;
   const [brush, setBrush] = useState<Brush>("none");
-  const [ppm, setPpm] = useState(3);
+  const [ppm, setPpm] = useState(() => (typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches ? 2 : 3));
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const dragRef = useRef<Drag | null>(null);
@@ -319,6 +332,23 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
   const X = (t: number) => (t - dayStart) * ppm;
   const range = useRef({ dayStart, dayEnd, ppm });
   range.current = { dayStart, dayEnd, ppm };
+
+  // bring "now" into view, on load and whenever the zoom changes
+  const scroller = useRef<HTMLDivElement>(null);
+  const nowRef = useRef(now);
+  nowRef.current = now;
+  const jumpToNow = () => {
+    const el = scroller.current;
+    const t = nowRef.current;
+    if (!el || t == null) return;
+    el.scrollTo({ left: Math.max(0, X(t) - (el.clientWidth - LABEL_W) / 2), behavior: "smooth" });
+  };
+  useEffect(() => {
+    const el = scroller.current;
+    const t = nowRef.current;
+    if (el && t != null) el.scrollLeft = Math.max(0, (t - dayStart) * ppm - (el.clientWidth - LABEL_W) / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ppm, compact]);
 
   const hours: number[] = [];
   for (let h = dayStart; h < dayEnd; h += 60) hours.push(h);
@@ -441,7 +471,14 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
   return (
     <div>
       <div className="palette no-print" role="toolbar" aria-label="Brush">
-        <span className="muted">Brush</span>
+        <button
+          className="brush brush-pan"
+          aria-pressed={brush === "none"}
+          onClick={() => setBrush("none")}
+          title="Scroll and look without painting (Esc)"
+        >
+          Pan
+        </button>
         {BRUSHES.map((b) => (
           <button
             key={b.id}
@@ -455,7 +492,12 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
           </button>
         ))}
         <span style={{ flex: 1 }} />
-        <span className="muted">Zoom</span>
+        {now != null && (
+          <button className="btn small" onClick={jumpToNow} title="Scroll to the current time">
+            Now
+          </button>
+        )}
+        <span className="muted zoom-label">Zoom</span>
         <button
           className="btn small"
           disabled={ppm === ZOOMS[0]}
@@ -474,7 +516,10 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
         </button>
       </div>
       <p className="muted palette-hint" style={{ margin: "0 0 10px" }}>
-        {brush === "none" && "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down)."}
+        {brush === "none" &&
+          (compact
+            ? "Pan mode: swipe to scroll. Pick a brush to paint, then drag sideways across a row."
+            : "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down).")}
         {brush === "break" &&
           "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
         {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
@@ -482,10 +527,10 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
           `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
       </p>
 
-      <div className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
+      <div ref={scroller} className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
         <div
           className="tl"
-          style={{ width: LABEL_W + width, ["--ppm" as string]: ppm }}
+          style={{ width: LABEL_W + width, ["--ppm" as string]: ppm, ["--label" as string]: `${LABEL_W}px` }}
           onPointerMove={track}
           onPointerLeave={() => setHover(null)}
         >
@@ -524,8 +569,9 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
                         className="btn ghost small bump"
                         onClick={() => onBump(s.id)}
                         title="Send home / hand off to the next shift"
+                        aria-label={`Bump ${s.name} out`}
                       >
-                        Bump out
+                        {compact ? "⋯" : "Bump out"}
                       </button>
                     )}
                   </div>
