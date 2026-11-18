@@ -3,7 +3,7 @@ import { requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
 import { assignCover } from "./cover";
-import { DayState, DEFAULT_SETTINGS } from "./types";
+import { DayState, DEFAULT_SETTINGS, Position } from "./types";
 
 const h = (hr: number, m = 0) => hr * 60 + m;
 const S = DEFAULT_SETTINGS;
@@ -165,7 +165,7 @@ describe("break cover", () => {
       expect(res.status).not.toBe("uncovered");
       day = res.day;
       const c = h(14, 5);
-      const pos = day.cells[cellKey(who.id, c)].pos;
+      const pos = day.cells[cellKey(who.id, c)].pos as Position;
       expect(staffAt(day, S, c)[pos].length).toBeGreaterThanOrEqual(1);
       // reset for the next person
       day = eraseCells(day, S, who.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
@@ -202,6 +202,37 @@ describe("break cover", () => {
     day = assignCover(placed.day, S, alex.id, placed.breakId!).day;
     day = eraseCells(day, S, alex.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
     expect(Object.values(day.cells).some((c) => c.cover === placed.breakId)).toBe(false);
+  });
+});
+
+describe("custom positions", () => {
+  it("keeps the typed name and survives a re-deal", () => {
+    let day = quietDay();
+    const bri = day.shifts.find((s) => s.name === "Bri")!;
+    day = paintCells(day, bri.id, [h(15), h(15, 5), h(15, 10)], "other", "  Tournament ");
+    expect(day.cells[cellKey(bri.id, h(15))]).toEqual({ pos: "other", pinned: true, label: "Tournament" });
+    const again = autoFill(day, S);
+    expect(again[cellKey(bri.id, h(15, 10))].label).toBe("Tournament");
+  });
+
+  it("is not counted toward Front, Bar or Dungeon", () => {
+    let day = quietDay();
+    const c = h(15);
+    const before = staffAt(day, S, c);
+    const total = before.front.length + before.bar.length + before.dungeon.length;
+    const bri = day.shifts.find((s) => s.name === "Bri")!;
+    day = paintCells(day, bri.id, [c], "other", "Photo booth");
+    const after = staffAt(day, S, c);
+    expect(after.front.length + after.bar.length + after.dungeon.length).toBe(total - 1);
+  });
+
+  it("needs no cover when its holder takes a break", () => {
+    let day = quietDay();
+    const bri = day.shifts.find((s) => s.name === "Bri")!;
+    day = paintCells(day, bri.id, [h(15), h(15, 5), h(15, 10), h(15, 15)], "other", "Tournament");
+    const placed = placeBreak(day, bri.id, h(15), 20);
+    const res = assignCover(placed.day, S, bri.id, placed.breakId!);
+    expect(res.status).toBe("none-needed");
   });
 });
 
