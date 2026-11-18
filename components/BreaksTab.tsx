@@ -2,7 +2,7 @@
 
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
-import { Brk, DayState, LEAD_LABEL, POSITION_LABEL, Shift } from "@/lib/types";
+import { Brk, DayState, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { SHIFT_RULES, breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
 import { breakImpact } from "@/lib/rotation";
@@ -206,7 +206,7 @@ function PrintLog({ day, shifts, opener, closer }: { day: DayState; shifts: Shif
             <tr key={`${s.id}-${b?.id ?? i}`}>
               <td>
                 {s.name}
-                {s.role && <span className="plog-role"> ({LEAD_LABEL[s.role]})</span>}
+                {s.role && <span className="plog-role"> ({roleName(s)})</span>}
               </td>
               <td>{fmt(s.start)}</td>
               <td>{b ? `${b.length} min` : ""}</td>
@@ -276,7 +276,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
     <tr className={`${status} ${first ? "group-start" : ""}`}>
       <td className="name">
         {shift.name || "(no name)"}
-        {first && shift.role && <small>{LEAD_LABEL[shift.role]}</small>}
+        {first && shift.role && <small>{roleName(shift)}</small>}
         {first && shift.floater && <small>Floater</small>}
         {impact && impact.position && (impact.status === "short" || impact.status === "open") && (
           <small style={{ color: impact.status === "open" ? "var(--danger)" : "var(--warn)" }}>

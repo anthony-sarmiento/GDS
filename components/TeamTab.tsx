@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Ctx } from "./ctx";
-import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, Shift } from "@/lib/types";
+import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
 import { requiredBreaks } from "@/lib/breaks";
 import { fmt, fmtHours, fromInput, hoursOf, normalizeEnd, toInput } from "@/lib/time";
@@ -33,11 +33,14 @@ function AssignOptions() {
           Stays at {POSITION_LABEL[p]}
         </option>
       ))}
-      {(Object.keys(LEAD_LABEL) as LeadRole[]).map((r) => (
-        <option key={r} value={`lead:${r}`}>
-          {LEAD_LABEL[r]}
-        </option>
-      ))}
+      {(Object.keys(LEAD_LABEL) as LeadRole[])
+        .filter((r) => r !== "custom")
+        .map((r) => (
+          <option key={r} value={`lead:${r}`}>
+            {LEAD_LABEL[r]}
+          </option>
+        ))}
+      <option value="lead:custom">Custom… (type your own)</option>
     </>
   );
 }
@@ -56,7 +59,18 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
   const [start, setStart] = useState("11:00");
   const [end, setEnd] = useState("17:00");
   const [assign, setAssign] = useState("");
+  const [customName, setCustomName] = useState("");
   const [floater, setFloater] = useState(false);
+
+  // names typed for custom assignments before, to offer again
+  const customNames = Array.from(
+    new Set(
+      Object.values(state.days)
+        .flatMap((d) => d.shifts)
+        .map((s) => s.roleLabel?.trim() ?? "")
+        .filter(Boolean),
+    ),
+  ).sort();
 
   const previous = lastTeamBefore(state, day.date);
 
@@ -67,7 +81,11 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
     if (!name.trim() || s == null || en == null) return;
     remember(name);
     const { lock, role } = parseAssign(assign);
-    mutate((d) => addShift(d, { name, start: s, end: en, lock, floater: role ? false : floater, role }), { auto: true });
+    if (role === "custom" && !customName.trim()) return;
+    mutate(
+      (d) => addShift(d, { name, start: s, end: en, lock, floater: role ? false : floater, role, roleLabel: customName }),
+      { auto: true },
+    );
     setName("");
   }
 
@@ -122,6 +140,21 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
               <AssignOptions />
             </select>
           </label>
+          {assign === "lead:custom" && (
+            <label className="lbl" style={{ flex: "1 1 180px" }}>
+              Position name
+              <input
+                className="field"
+                list="gds-roles"
+                value={customName}
+                maxLength={24}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g. Events, Buyer"
+                autoComplete="off"
+                required
+              />
+            </label>
+          )}
           {!assign.startsWith("lead:") && (
             <label className="checkbox">
               <input type="checkbox" checked={floater} onChange={(e) => setFloater(e.target.checked)} />
@@ -132,6 +165,11 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             Add
           </button>
         </form>
+        <datalist id="gds-roles">
+          {customNames.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
         <datalist id="gds-names">
           {state.names.map((n) => (
             <option key={n} value={n} />
@@ -223,8 +261,20 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
                 <AssignOptions />
               </select>
             </label>
-            {s.role ? (
-              <span className="badge">{LEAD_LABEL[s.role]}</span>
+            {s.role === "custom" ? (
+              <label className="lbl">
+                Position name
+                <input
+                  className="field"
+                  list="gds-roles"
+                  value={s.roleLabel ?? ""}
+                  maxLength={24}
+                  placeholder="Custom"
+                  onChange={(e) => mutate((d) => updateShift(d, s.id, { roleLabel: e.target.value }))}
+                />
+              </label>
+            ) : s.role ? (
+              <span className="badge">{roleName(s)}</span>
             ) : (
               <label className="checkbox">
                 <input

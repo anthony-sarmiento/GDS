@@ -8,12 +8,17 @@ export const POSITION_LABEL: Record<Position, string> = {
 };
 
 /** One break on the log. All times are minutes since midnight (can exceed 1440 for after-midnight). */
-export type LeadRole = "opening" | "closing" | "inventory";
+export type LeadRole = "opening" | "closing" | "inventory" | "custom";
 export const LEAD_LABEL: Record<LeadRole, string> = {
   opening: "Opening Lead",
   closing: "Closing Lead",
   inventory: "Inventory Lead",
+  custom: "Custom",
 };
+
+/** What to call someone's assignment when they are off the rotation. */
+export const roleName = (s: { role?: LeadRole | null; roleLabel?: string }): string =>
+  !s.role ? "" : s.role === "custom" ? s.roleLabel?.trim() || "Custom" : LEAD_LABEL[s.role];
 
 export interface Brk {
   id: string;
@@ -44,6 +49,8 @@ export interface Shift {
   floater: boolean;
   /** Leads are not part of the rotation. They have a role instead of a position. */
   role?: LeadRole | null;
+  /** The name typed in for a "custom" assignment, e.g. "Events". */
+  roleLabel?: string;
   breaks: Brk[];
   /** The break list was edited by hand, so don't regenerate it when the shift times change. */
   breaksCustom: boolean;

@@ -19,7 +19,7 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
 
 ## How it works
 
-- **Team tab** – add people with clock in/out. Quick-fill buttons: Opening Lead 10–5:15, Opener 11–5, Closer 5–11, Closer 5–12, Floater 1–9, Closing Lead, Inventory Lead. *Assignment* is Rotates, Stays at a position, or a lead role. **Leads are not on the board**: they have a role (Opening / Closing / Inventory Lead) and show up on the break log and break timer only.
+- **Team tab** – add people with clock in/out. Quick-fill buttons: Opening Lead 10–5:15, Opener 11–5, Closer 5–11, Closer 5–12, Floater 1–9, Closing Lead, Inventory Lead. *Assignment* is Rotates, Stays at a position, a lead role, or **Custom…** where you type your own name (Events, Buyer...). **Leads and custom assignments are not on the board**: they have a role (Opening / Closing / Inventory Lead) and show up on the break log and break timer only.
 - **Board tab** (CDS style, minute precision)
   - *Right now*: who is on Front / Bar / Dungeon, who is on break, who is short, and who could move to cover. Each person has a **Bump** button.
   - *Break timer*: Start / End stamps real break times.
