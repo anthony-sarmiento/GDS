@@ -445,6 +445,12 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     const lane = e.currentTarget;
+    // keep the stroke attached to this row even if the pointer wanders off it
+    try {
+      lane.setPointerCapture(e.pointerId);
+    } catch {
+      /* not every browser allows it; the window listeners still cover the stroke */
+    }
     const x = e.clientX - lane.getBoundingClientRect().left;
     const t = Math.max(dayStart, Math.min(dayEnd - g, dayStart + Math.floor(x / ppm / g) * g));
     const d = { shiftId: shift.id, lane, t0: t, t1: t };
@@ -497,23 +503,25 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
             Now
           </button>
         )}
-        <span className="muted zoom-label">Zoom</span>
-        <button
-          className="btn small"
-          disabled={ppm === ZOOMS[0]}
-          onClick={() => setPpm(ZOOMS[Math.max(0, ZOOMS.indexOf(ppm) - 1)])}
-          aria-label="Zoom out"
-        >
-          −
-        </button>
-        <button
-          className="btn small"
-          disabled={ppm === ZOOMS[ZOOMS.length - 1]}
-          onClick={() => setPpm(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(ppm) + 1)])}
-          aria-label="Zoom in"
-        >
-          +
-        </button>
+        <div className="zoom-group" role="group" aria-label="Zoom">
+          <span className="muted zoom-label">Zoom</span>
+          <button
+            className="btn small"
+            disabled={ppm === ZOOMS[0]}
+            onClick={() => setPpm(ZOOMS[Math.max(0, ZOOMS.indexOf(ppm) - 1)])}
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <button
+            className="btn small"
+            disabled={ppm === ZOOMS[ZOOMS.length - 1]}
+            onClick={() => setPpm(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(ppm) + 1)])}
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+        </div>
       </div>
       <p className="muted palette-hint" style={{ margin: "0 0 10px" }}>
         {brush === "none" &&
@@ -525,6 +533,7 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
         {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
         {(brush === "front" || brush === "bar" || brush === "dungeon") &&
           `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
+        {compact && brush !== "none" && " Tap Pan to scroll the board."}
       </p>
 
       <div ref={scroller} className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
@@ -645,7 +654,7 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
           <div className="tl-row tl-sub">
             <div className="tl-label">
               <strong>Coverage</strong>
-              <small>People on each position</small>
+              <small className="hide-compact">People on each position</small>
             </div>
             <div className="tl-lane sub" style={{ width }} />
           </div>
