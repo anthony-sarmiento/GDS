@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
-import { addShift, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
-import { assignCover } from "./cover";
+import { addShift, assignRange, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
+import { assignCover, suggestMover } from "./cover";
 import { DayState, DEFAULT_SETTINGS, Position, roleName } from "./types";
 
 const h = (hr: number, m = 0) => hr * 60 + m;
@@ -202,6 +202,44 @@ describe("break cover", () => {
     day = assignCover(placed.day, S, alex.id, placed.breakId!).day;
     day = eraseCells(day, S, alex.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
     expect(Object.values(day.cells).some((c) => c.cover === placed.breakId)).toBe(false);
+  });
+});
+
+describe("pushed assignments", () => {
+  it("sends someone somewhere for exactly the time given and leaves the rest of their day", () => {
+    let day = quietDay();
+    const cam = day.shifts.find((s) => s.name === "Cam")!;
+    const before = { ...day.cells };
+    day = assignRange(day, S, cam.id, h(14, 15), h(15, 5), "bar");
+    for (const t of [h(14, 15), h(14, 30), h(15)]) expect(day.cells[cellKey(cam.id, t)]).toEqual({ pos: "bar", pinned: true });
+    expect(day.cells[cellKey(cam.id, h(14, 10))]).toEqual(before[cellKey(cam.id, h(14, 10))]);
+    expect(day.cells[cellKey(cam.id, h(15, 5))]).toEqual(before[cellKey(cam.id, h(15, 5))]);
+  });
+
+  it("can send someone to a named custom spot", () => {
+    let day = quietDay();
+    const bri = day.shifts.find((s) => s.name === "Bri")!;
+    day = assignRange(day, S, bri.id, h(14), h(15), "other", "Tournament");
+    expect(day.cells[cellKey(bri.id, h(14, 30))]).toEqual({ pos: "other", pinned: true, label: "Tournament" });
+  });
+
+  it("does nothing for an empty or backwards range, or outside their shift", () => {
+    const day = quietDay();
+    const cam = day.shifts.find((s) => s.name === "Cam")!;
+    expect(assignRange(day, S, cam.id, h(14), h(14), "bar")).toBe(day);
+    expect(assignRange(day, S, cam.id, h(20), h(21), "bar").cells).toEqual(day.cells);
+  });
+
+  it("suggests someone to cover the position that was left", () => {
+    let day = quietDay();
+    const c = h(14);
+    const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, c)]?.pos === "dungeon" && s.start <= c && c < s.end)!;
+    // send the Dungeon holder to a custom spot: Dungeon is left empty
+    const draft = assignRange(day, S, holder.id, h(14), h(15), "other", "Tournament");
+    const mover = suggestMover(draft, S, "dungeon", c, holder.id, [c]);
+    expect(mover).not.toBeNull();
+    expect(mover!.shift.id).not.toBe(holder.id);
+    day = draft;
   });
 });
 

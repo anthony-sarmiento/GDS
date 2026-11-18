@@ -136,3 +136,41 @@ export function applyBreakChange(
   if (owner) day = assignCover(day, settings, owner.id, r.breakId).day;
   return day;
 }
+
+/**
+ * Who could step onto a position that has been left short at column `c`.
+ * First choice is someone their own position can spare (floater first). If the position would be
+ * left empty, someone whose position stays attended will do. `busyCells` are columns the mover must
+ * be free for.
+ */
+export function suggestMover(
+  day: DayState,
+  settings: Settings,
+  position: Position,
+  c: number,
+  excludeId: string,
+  busyCells: number[] = [c],
+): { shift: Shift; from: Position } | null {
+  const g = settings.gridMinutes;
+  const posOf = (s: Shift): Position | undefined => {
+    const p = day.cells[cellKey(s.id, c)]?.pos;
+    return p === "other" ? undefined : p;
+  };
+  const working = rotating(day.shifts).filter(
+    (s) => s.id !== excludeId && isPresent(s, c, g) && !breakAtCell(s, c, g) && s.sentHomeAt == null,
+  );
+  const countAt = (p: Position) => working.filter((s) => posOf(s) === p).length;
+  const remaining = countAt(position);
+  if (remaining >= settings.limits[position].min) return null;
+
+  const movable = working.filter((s) => {
+    const from = posOf(s);
+    return from && from !== position && !s.lock && !busyCells.some((b) => breakAtCell(s, b, g));
+  });
+  const order = (a: Shift, b: Shift) =>
+    Number(b.floater) - Number(a.floater) || countAt(posOf(b)!) - countAt(posOf(a)!);
+  const spare = movable.filter((s) => countAt(posOf(s)!) - 1 >= settings.limits[posOf(s)!].min).sort(order);
+  const lenient = remaining === 0 ? movable.filter((s) => countAt(posOf(s)!) - 1 >= 1).sort(order) : [];
+  const pick = spare[0] ?? lenient[0];
+  return pick ? { shift: pick, from: posOf(pick)! } : null;
+}

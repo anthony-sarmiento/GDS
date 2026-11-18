@@ -24,7 +24,7 @@ function parseAssign(v: string): { lock: Position | null; role: LeadRole | null 
 }
 const assignOf = (s: Pick<Shift, "lock" | "role">) => (s.role ? `lead:${s.role}` : (s.lock ?? ""));
 
-function AssignOptions() {
+function AssignOptions({ keepCustom = false }: { keepCustom?: boolean }) {
   return (
     <>
       <option value="">Rotates</option>
@@ -40,7 +40,7 @@ function AssignOptions() {
             {LEAD_LABEL[r]}
           </option>
         ))}
-      <option value="lead:custom">Custom… (type your own)</option>
+      {keepCustom && <option value="lead:custom">Custom (typed name)</option>}
     </>
   );
 }
@@ -59,7 +59,6 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
   const [start, setStart] = useState("11:00");
   const [end, setEnd] = useState("17:00");
   const [assign, setAssign] = useState("");
-  const [customName, setCustomName] = useState("");
   const [floater, setFloater] = useState(false);
 
   // names typed for custom assignments before, to offer again
@@ -81,11 +80,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
     if (!name.trim() || s == null || en == null) return;
     remember(name);
     const { lock, role } = parseAssign(assign);
-    if (role === "custom" && !customName.trim()) return;
-    mutate(
-      (d) => addShift(d, { name, start: s, end: en, lock, floater: role ? false : floater, role, roleLabel: customName }),
-      { auto: true },
-    );
+    mutate((d) => addShift(d, { name, start: s, end: en, lock, floater: role ? false : floater, role }), { auto: true });
     setName("");
   }
 
@@ -101,7 +96,9 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
       <div className="card">
         <div className="section-title" style={{ marginTop: 0 }}>
           <h2>Add to today&rsquo;s team</h2>
-          <p>Type a name, pick the hours, and GDS plans the rotation and breaks.</p>
+          <p>
+            Type a name and the hours. Positions are not set here: push assignments from the Board at the time they happen.
+          </p>
         </div>
 
         <div className="presets">
@@ -135,26 +132,11 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             <input type="time" className="field" value={end} onChange={(e) => setEnd(e.target.value)} required />
           </label>
           <label className="lbl">
-            Assignment
+            Works as
             <select className="field" value={assign} onChange={(e) => setAssign(e.target.value)}>
               <AssignOptions />
             </select>
           </label>
-          {assign === "lead:custom" && (
-            <label className="lbl" style={{ flex: "1 1 180px" }}>
-              Position name
-              <input
-                className="field"
-                list="gds-roles"
-                value={customName}
-                maxLength={24}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="e.g. Events, Buyer"
-                autoComplete="off"
-                required
-              />
-            </label>
-          )}
           {!assign.startsWith("lead:") && (
             <label className="checkbox">
               <input type="checkbox" checked={floater} onChange={(e) => setFloater(e.target.checked)} />
@@ -249,7 +231,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
               />
             </label>
             <label className="lbl">
-              Assignment
+              Works as
               <select
                 className="field"
                 value={assignOf(s)}
@@ -258,7 +240,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
                   mutate((d) => updateShift(d, s.id, { lock, role, floater: role ? false : s.floater }), { auto: true });
                 }}
               >
-                <AssignOptions />
+                <AssignOptions keepCustom={s.role === "custom"} />
               </select>
             </label>
             {s.role === "custom" ? (

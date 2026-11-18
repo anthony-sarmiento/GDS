@@ -1,6 +1,6 @@
 import { AppState, Brk, CellPos, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
 import { defaultBreaks, newBreak, planBreaks, syncShiftBreaks, uid } from "./breaks";
-import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor } from "./rotation";
+import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent } from "./rotation";
 import { clearAutoCells, clearCover } from "./cover";
 import { normalizeEnd } from "./time";
 
@@ -226,6 +226,26 @@ export function paintCells(
   const name = pos === "other" ? label?.trim() || undefined : undefined;
   for (const c of cellStarts) cells[cellKey(shiftId, c)] = { pos, pinned: true, ...(name ? { label: name } : {}) };
   return { ...day, cells };
+}
+
+/**
+ * Push an assignment: send someone to a position (or a named custom spot) from one time until another.
+ * The columns are pinned, so auto-deal leaves them alone; the rest of their day is untouched.
+ */
+export function assignRange(
+  day: DayState,
+  settings: Settings,
+  shiftId: string,
+  from: number,
+  until: number,
+  pos: CellPos,
+  label?: string,
+): DayState {
+  const shift = day.shifts.find((s) => s.id === shiftId);
+  if (!shift || until <= from) return day;
+  const g = settings.gridMinutes;
+  const cells = cellsFor(day.shifts, settings).filter((c) => c + g > from && c < until && isPresent(shift, c, g));
+  return paintCells(day, shiftId, cells, pos, label);
 }
 
 /** Clear painted columns (they go back to automatic) and un-place any break shown there. */
