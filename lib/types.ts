@@ -53,8 +53,13 @@ export interface Shift {
   bumpedBy?: string;
 }
 
+/** A block on the board is one of the three positions, or "other" with a label the lead types in. */
+export type CellPos = Position | "other";
+
 export interface Cell {
-  pos: Position;
+  pos: CellPos;
+  /** Name for an "other" block, e.g. "Tournament". */
+  label?: string;
   /** Set by hand; auto-rotate never moves it. */
   pinned: boolean;
   /** This block exists to cover a break (the break's id). It goes away if the break does. */

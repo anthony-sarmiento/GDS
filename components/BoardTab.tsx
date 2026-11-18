@@ -22,17 +22,39 @@ import {
 import { bumpOut, endBreak, eraseCells, paintCells, placeBreak, startBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fmtShort, fromInput, toInput } from "@/lib/time";
 
-type Brush = "none" | Position | "break" | "erase";
+type Brush = "none" | Position | "other" | "break" | "erase";
 
 const BRUSHES: { id: Brush; label: string; key: string; cls: string }[] = [
   { id: "front", label: "Front", key: "1", cls: "pos-front" },
   { id: "bar", label: "Bar", key: "2", cls: "pos-bar" },
   { id: "dungeon", label: "Dungeon", key: "3", cls: "pos-dungeon" },
+  { id: "other", label: "Custom", key: "5", cls: "pos-other" },
   { id: "break", label: "Break", key: "4", cls: "brush-break" },
   { id: "erase", label: "Erase", key: "0", cls: "brush-erase" },
 ];
 
 const ZOOMS = [1.5, 2, 3, 4, 6]; // pixels per minute
+
+const LABELS_KEY = "gds:custom-labels";
+function loadLabels(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(LABELS_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+function saveLabels(list: string[]) {
+  try {
+    localStorage.setItem(LABELS_KEY, JSON.stringify(list));
+  } catch {
+    /* private mode: the labels just are not remembered */
+  }
+}
+
+/** Name shown on a block. */
+const blockName = (pos: string, label?: string) =>
+  pos === "other" ? label || "Other" : POSITION_LABEL[pos as Position];
 
 /** Phone-sized screen: narrower name column, tighter default zoom. */
 function useCompact(): boolean {
@@ -161,6 +183,16 @@ function NowPanel({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
         </p>
       </div>
       {onShift.length === 0 && <div className="card muted">Nobody is clocked in at this time.</div>}
+      {onShift.length > 0 && floor.elsewhere.length > 0 && (
+        <div className="card elsewhere">
+          <strong>Elsewhere</strong>
+          {floor.elsewhere.map(({ shift, label }) => (
+            <span key={shift.id} className="badge pos-other">
+              {shift.name} · {label}
+            </span>
+          ))}
+        </div>
+      )}
       {onShift.length > 0 && (
         <div className="now-grid">
           {POSITIONS.map((p) => {
@@ -319,12 +351,15 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
   const compact = useCompact();
   const LABEL_W = compact ? 92 : 200;
   const [brush, setBrush] = useState<Brush>("none");
+  const [customLabel, setCustomLabel] = useState("");
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => setRecent(loadLabels()), []);
   const [ppm, setPpm] = useState(() => (typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches ? 2 : 3));
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const dragRef = useRef<Drag | null>(null);
-  const live = useRef({ ctx, brush });
-  live.current = { ctx, brush };
+  const live = useRef({ ctx, brush, customLabel });
+  live.current = { ctx, brush, customLabel };
 
   const dayStart = Math.floor(Math.min(...crew.map((s) => s.start)) / 60) * 60;
   const dayEnd = Math.ceil(Math.max(...crew.map((s) => s.end)) / 60) * 60;
@@ -361,7 +396,10 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") setBrush("none");
       const hit = BRUSHES.find((b) => b.key === e.key);
-      if (hit) setBrush((cur) => (cur === hit.id ? "none" : hit.id));
+      if (hit) {
+        e.preventDefault(); // otherwise the key is typed into the custom-name box that opens
+        setBrush((cur) => (cur === hit.id ? "none" : hit.id));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -398,7 +436,7 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
     };
 
     function apply(d: Drag) {
-      const { ctx: c, brush: b } = live.current;
+      const { ctx: c, brush: b, customLabel: label } = live.current;
       const day2 = c.day;
       const shift = day2.shifts.find((s) => s.id === d.shiftId);
       if (!shift || b === "none") return;
@@ -426,7 +464,17 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
         if (targets.length) c.mutate((dd) => eraseCells(dd, c.settings, shift.id, targets), { auto: "fill" });
       } else {
         const targets = moved ? cellsIn(lo, hi) : run ? cellsIn(run.start, run.end) : [];
-        if (targets.length) c.mutate((dd) => paintCells(dd, shift.id, targets, b), { auto: "fill" });
+        if (targets.length) {
+          const name = b === "other" ? label.trim() : "";
+          c.mutate((dd) => paintCells(dd, shift.id, targets, b, name), { auto: "fill" });
+          if (name) {
+            setRecent((cur) => {
+              const next = [name, ...cur.filter((x) => x.toLowerCase() !== name.toLowerCase())].slice(0, 8);
+              saveLabels(next);
+              return next;
+            });
+          }
+        }
       }
     }
 
@@ -503,6 +551,49 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
             Now
           </button>
         )}
+      </div>
+      {brush === "other" && (
+        <div className="custom-row no-print">
+          <input
+            className="field"
+            value={customLabel}
+            maxLength={24}
+            placeholder="Type a position, e.g. Tournament"
+            aria-label="Custom position name"
+            onChange={(e) => setCustomLabel(e.target.value)}
+            autoFocus
+          />
+          {recent.length > 0 && (
+            <div className="chip-row">
+              {recent.map((r) => (
+                <button
+                  key={r}
+                  className="btn small"
+                  aria-pressed={customLabel.trim().toLowerCase() === r.toLowerCase()}
+                  onClick={() => setCustomLabel(r)}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="board-sub">
+      <p className="muted palette-hint" style={{ margin: 0 }}>
+        {brush === "none" &&
+          (compact
+            ? "Pan mode: swipe to scroll. Pick a brush to paint, then drag sideways across a row."
+            : "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down).")}
+        {brush === "break" &&
+          "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
+        {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
+        {(brush === "front" || brush === "bar" || brush === "dungeon") &&
+          `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
+        {brush === "other" &&
+          "Type a name above, then drag across a row. Custom blocks are not counted as Front, Bar or Dungeon, so coverage will show the gap."}
+        {compact && brush !== "none" && " Tap Pan to scroll the board."}
+      </p>
         <div className="zoom-group" role="group" aria-label="Zoom">
           <span className="muted zoom-label">Zoom</span>
           <button
@@ -523,18 +614,6 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
           </button>
         </div>
       </div>
-      <p className="muted palette-hint" style={{ margin: "0 0 10px" }}>
-        {brush === "none" &&
-          (compact
-            ? "Pan mode: swipe to scroll. Pick a brush to paint, then drag sideways across a row."
-            : "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down).")}
-        {brush === "break" &&
-          "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
-        {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
-        {(brush === "front" || brush === "bar" || brush === "dungeon") &&
-          `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
-        {compact && brush !== "none" && " Tap Pan to scroll the board."}
-      </p>
 
       <div ref={scroller} className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
         <div
@@ -600,10 +679,10 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
                       key={`${r.pos}-${r.start}`}
                       className={`blk pos-${r.pos}`}
                       style={{ left: X(r.start), width: (r.end - r.start) * ppm }}
-                      title={`${s.name}: ${POSITION_LABEL[r.pos]} ${fmt(r.start)}–${fmt(r.end)}`}
+                      title={`${s.name}: ${blockName(r.pos, r.label)} ${fmt(r.start)}–${fmt(r.end)}`}
                     >
                       <span className="blk-label">
-                        {(r.end - r.start) * ppm > 46 ? POSITION_LABEL[r.pos] : POSITION_LABEL[r.pos][0]}
+                        {(r.end - r.start) * ppm > 46 ? blockName(r.pos, r.label) : blockName(r.pos, r.label)[0]}
                       </span>
                     </div>
                   ))}

@@ -1,4 +1,4 @@
-import { Brk, Cell, DayState, Limits, Position, POSITIONS, Settings, Shift } from "./types";
+import { Brk, Cell, CellPos, DayState, Limits, Position, POSITIONS, Settings, Shift } from "./types";
 
 export const cellKey = (shiftId: string, cellStart: number) => `${shiftId}@${cellStart}`;
 
@@ -173,7 +173,8 @@ export function autoFill(
       const onBreak = !!breakAtCell(s, c, g);
       if (existing && (existing.pinned || !recompute)) {
         decided.set(s.id, existing);
-        if (!onBreak) fixedCounts[existing.pos] += 1;
+        // a custom block ("Tournament") keeps someone busy but is not one of the three positions
+        if (!onBreak && existing.pos !== "other") fixedCounts[existing.pos] += 1;
       } else if (onBreak) {
         decided.set(s.id, { pos: prev.get(s.id) ?? s.lock ?? "front", pinned: false });
       } else if (s.lock) {
@@ -189,7 +190,7 @@ export function autoFill(
         prev: prev.get(s.id) ?? null,
         minutes: minutes.get(s.id)!,
         floater: s.floater,
-        keep: existingAt(s.id, c)?.pos ?? null,
+        keep: ((p) => (p === "other" ? null : (p ?? null)))(existingAt(s.id, c)?.pos),
       })),
       fixedCounts,
       limits,
@@ -201,7 +202,7 @@ export function autoFill(
     for (const s of present) {
       const cell = decided.get(s.id)!;
       out[cellKey(s.id, c)] = cell;
-      if (!breakAtCell(s, c, g)) {
+      if (!breakAtCell(s, c, g) && cell.pos !== "other") {
         minutes.get(s.id)![cell.pos] += overlap(s, c, g);
         prev.set(s.id, cell.pos);
       }
@@ -219,7 +220,7 @@ export function positionMinutes(day: DayState, settings: Settings): Record<strin
   for (const c of cellsFor(day.shifts, settings)) {
     for (const s of crew) {
       const cell = day.cells[cellKey(s.id, c)];
-      if (cell && !breakAtCell(s, c, g)) out[s.id][cell.pos] += overlap(s, c, g);
+      if (cell && cell.pos !== "other" && !breakAtCell(s, c, g)) out[s.id][cell.pos] += overlap(s, c, g);
     }
   }
   return out;
@@ -232,7 +233,7 @@ export function staffAt(day: DayState, settings: Settings, c: number): Record<Po
   for (const s of rotating(day.shifts)) {
     if (!isPresent(s, c, g) || breakAtCell(s, c, g)) continue;
     const cell = day.cells[cellKey(s.id, c)];
-    if (cell) out[cell.pos].push(s);
+    if (cell && cell.pos !== "other") out[cell.pos].push(s);
   }
   return out;
 }
@@ -249,6 +250,8 @@ export interface LiveFloor {
   cell: number | null;
   byPos: Record<Position, Shift[]>;
   onBreak: { shift: Shift; pos: Position | null; brk: Brk }[];
+  /** Working on a custom block (Tournament, Photo booth...) instead of a position. */
+  elsewhere: { shift: Shift; label: string }[];
 }
 
 /**
@@ -260,15 +263,18 @@ export function liveFloor(day: DayState, settings: Settings, t: number): LiveFlo
   const c = cellAt(cellsFor(day.shifts, settings), g, t);
   const byPos: Record<Position, Shift[]> = { front: [], bar: [], dungeon: [] };
   const onBreak: LiveFloor["onBreak"] = [];
-  if (c == null) return { cell: null, byPos, onBreak };
+  const elsewhere: LiveFloor["elsewhere"] = [];
+  if (c == null) return { cell: null, byPos, onBreak, elsewhere };
   for (const s of rotating(day.shifts)) {
     if (!(s.start <= t && t < s.end)) continue;
-    const pos = day.cells[cellKey(s.id, c)]?.pos ?? null;
+    const cell = day.cells[cellKey(s.id, c)];
+    const pos = cell && cell.pos !== "other" ? cell.pos : null;
     const brk = activeBreak(s);
     if (brk) onBreak.push({ shift: s, pos, brk });
+    else if (cell?.pos === "other") elsewhere.push({ shift: s, label: cell.label || "Other" });
     else if (pos) byPos[pos].push(s);
   }
-  return { cell: c, byPos, onBreak };
+  return { cell: c, byPos, onBreak, elsewhere };
 }
 
 /** Someone who can move to a short position: the floater first, then anyone from a position above its minimum. */
@@ -305,6 +311,7 @@ export function breakImpact(day: DayState, settings: Settings, shift: Shift, t: 
   const c = cellAt(cellsFor(day.shifts, settings), g, t);
   const cell = c == null ? undefined : day.cells[cellKey(shift.id, c)];
   if (c == null || !cell) return { position: null, remaining: 0, min: 0, status: "unknown" };
+  if (cell.pos === "other") return { position: null, remaining: 0, min: 0, status: "ok" };
   const position = cell.pos;
   const remaining = staffAt(day, settings, c)[position].filter((s) => s.id !== shift.id).length;
   const { min } = settings.limits[position];
@@ -312,7 +319,8 @@ export function breakImpact(day: DayState, settings: Settings, shift: Shift, t: 
 }
 
 export interface PosRun {
-  pos: Position;
+  pos: CellPos;
+  label?: string;
   start: number;
   end: number;
 }
@@ -329,8 +337,8 @@ export function positionRuns(day: DayState, settings: Settings, shift: Shift): {
     const start = Math.max(c, shift.start);
     const end = Math.min(c + g, shift.end);
     const last = runs[runs.length - 1];
-    if (last && last.pos === cell.pos && last.end === start) last.end = end;
-    else runs.push({ pos: cell.pos, start, end });
+    if (last && last.pos === cell.pos && last.label === cell.label && last.end === start) last.end = end;
+    else runs.push({ pos: cell.pos, label: cell.label, start, end });
     if (cell.pinned) {
       const lp = pins[pins.length - 1];
       if (lp && lp[1] === start) lp[1] = end;

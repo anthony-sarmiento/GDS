@@ -59,10 +59,14 @@ export function assignCover(input: DayState, settings: Settings, shiftId: string
   const c0 = spanCells[0];
   if (c0 == null) return none();
   const position = day.cells[cellKey(shift.id, c0)]?.pos;
-  if (!position) return none();
+  // on a custom block (or nothing at all): no position to cover
+  if (!position || position === "other") return none();
 
   const crew = rotating(day.shifts);
-  const posOf = (s: Shift) => day.cells[cellKey(s.id, c0)]?.pos;
+  const posOf = (s: Shift): Position | undefined => {
+    const p = day.cells[cellKey(s.id, c0)]?.pos;
+    return p === "other" ? undefined : p;
+  };
   const working = crew.filter((s) => s.id !== shift.id && isPresent(s, c0, g) && !breakAtCell(s, c0, g));
   const countAt = (p: Position) => working.filter((s) => posOf(s) === p).length;
 

@@ -15,6 +15,7 @@
   --front: #46e63c;
   --bar: #ffb547;
   --dungeon: #a98bff;
+  --other: #ff7ac8;
   --break: #5cc8ff;
 
   --radius: 12px;
@@ -385,6 +386,9 @@ label.lbl {
 }
 .pos-dungeon {
   --pos: var(--dungeon);
+}
+.pos-other {
+  --pos: var(--other);
 }
 
 /* ---------- now panel ---------- */
@@ -1686,18 +1690,9 @@ button,
     width: 100%;
   }
 
-  .zoom-group {
-    display: flex;
-    gap: 6px;
-  }
-
-  .zoom-group .zoom-label {
-    display: none;
-  }
-
   .zoom-group .btn {
-    flex: 1;
-    min-height: 42px;
+    min-height: 40px;
+    width: 44px;
     padding: 0;
     font-size: 1.1rem;
   }
@@ -2008,4 +2003,58 @@ button,
   .plog tr {
     break-inside: avoid;
   }
+}
+
+/* ---------- custom position ---------- */
+.custom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.custom-row .field {
+  flex: 1 1 220px;
+  min-width: 0;
+  border-color: var(--other);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-row .btn[aria-pressed="true"] {
+  background: var(--other);
+  border-color: var(--other);
+  color: var(--navy-900);
+}
+
+.board-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.board-sub .palette-hint {
+  flex: 1 1 260px;
+}
+
+.elsewhere {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-color: var(--other);
+}
+
+.elsewhere .badge {
+  background: color-mix(in srgb, var(--other) 20%, transparent);
+  color: var(--other);
 }

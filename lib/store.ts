@@ -1,4 +1,4 @@
-import { AppState, Brk, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
+import { AppState, Brk, CellPos, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
 import { defaultBreaks, newBreak, planBreaks, syncShiftBreaks, uid } from "./breaks";
 import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor } from "./rotation";
 import { clearAutoCells, clearCover } from "./cover";
@@ -212,10 +212,17 @@ export function resetBreak(day: DayState, shiftId: string, breakId: string): Day
   return updateBreak(day, shiftId, breakId, { start: null, end: null });
 }
 
-/** Paint a position onto columns of one person's row. Painted columns are pinned. */
-export function paintCells(day: DayState, shiftId: string, cellStarts: number[], pos: Position): DayState {
+/** Paint a position (or a custom block with a typed label) onto columns of one person's row. Painted columns are pinned. */
+export function paintCells(
+  day: DayState,
+  shiftId: string,
+  cellStarts: number[],
+  pos: CellPos,
+  label?: string,
+): DayState {
   const cells = { ...day.cells };
-  for (const c of cellStarts) cells[cellKey(shiftId, c)] = { pos, pinned: true };
+  const name = pos === "other" ? label?.trim() || undefined : undefined;
+  for (const c of cellStarts) cells[cellKey(shiftId, c)] = { pos, pinned: true, ...(name ? { label: name } : {}) };
   return { ...day, cells };
 }
 
@@ -304,7 +311,8 @@ export function bumpOut(
   // where was the person standing right before they left?
   const allCells = cellsFor(day.shifts, settings);
   const lastCell = cellAt(allCells, g, time - 1);
-  const pos = lastCell == null ? undefined : day.cells[cellKey(out.id, lastCell)]?.pos;
+  const left = lastCell == null ? undefined : day.cells[cellKey(out.id, lastCell)];
+  const pos = left?.pos;
 
   let next = updateShift(day, out.id, { end: time });
   next = {
@@ -319,7 +327,7 @@ export function bumpOut(
     const blockEnd = settings.anchor + (Math.floor((from - settings.anchor) / rot) + 1) * rot;
     const cells = { ...next.cells };
     for (const c of allCells) {
-      if (c + g > from && c < blockEnd) cells[cellKey(incoming.id, c)] = { pos, pinned: true };
+      if (c + g > from && c < blockEnd) cells[cellKey(incoming.id, c)] = { pos, pinned: true, ...(left?.label ? { label: left.label } : {}) };
     }
     next = { ...next, cells };
   }

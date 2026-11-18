@@ -24,6 +24,7 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
   - *Right now*: who is on Front / Bar / Dungeon, who is on break, who is short, and who could move to cover. Each person has a **Bump** button.
   - *Break timer*: Start / End stamps real break times.
   - *Board*: a continuous timeline, one row per person, snapping to 5 minutes. Pick a **brush** (keys `1` Front, `2` Bar, `3` Dungeon, `4` Break, `0` Erase, `Esc` to put it down) and **drag across a row for an exact range**. A plain click repaints the whole block under the cursor. Neighbouring blocks on the same position merge into one. Painted ranges are pinned (thin underline) and never move on their own. Zoom with − / +.
+  - *Custom brush* (key `5`): type any name (Tournament, Photo booth, Inventory...) and paint it like a position. Recent names show as quick buttons. Custom blocks are pink, are not counted as Front, Bar or Dungeon, and never move on their own, so coverage shows the gap while someone is on one.
   - *Break brush*: drag to set the exact start and end of a break, or click to drop it at that minute using its normal length.
   - *Coverage*: people on each position over the day. Red = empty, amber = short or over the max.
   - *Bump out*: send someone home and hand their position to the next shift. The replacement is pinned to that position for the rest of the block.
