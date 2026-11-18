@@ -3,7 +3,7 @@ import { requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
 import { assignCover } from "./cover";
-import { DayState, DEFAULT_SETTINGS, Position } from "./types";
+import { DayState, DEFAULT_SETTINGS, Position, roleName } from "./types";
 
 const h = (hr: number, m = 0) => hr * 60 + m;
 const S = DEFAULT_SETTINGS;
@@ -202,6 +202,24 @@ describe("break cover", () => {
     day = assignCover(placed.day, S, alex.id, placed.breakId!).day;
     day = eraseCells(day, S, alex.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
     expect(Object.values(day.cells).some((c) => c.cover === placed.breakId)).toBe(false);
+  });
+});
+
+describe("custom assignment", () => {
+  it("takes someone off the rotation and shows the typed name", () => {
+    let day = typicalDay();
+    day = addShift(day, { name: "Quinn", start: h(11), end: h(17), lock: null, floater: false, role: "custom", roleLabel: "  Events " });
+    day = refresh(day, initialState(), null);
+    const quinn = day.shifts.find((s) => s.name === "Quinn")!;
+    expect(roleName(quinn)).toBe("Events");
+    expect(Object.keys(day.cells).some((k) => k.startsWith(`${quinn.id}@`))).toBe(false);
+    expect(quinn.breaks.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to Custom when no name was typed", () => {
+    expect(roleName({ role: "custom" })).toBe("Custom");
+    expect(roleName({ role: "opening" })).toBe("Opening Lead");
+    expect(roleName({ role: null })).toBe("");
   });
 });
 

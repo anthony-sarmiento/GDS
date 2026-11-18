@@ -90,6 +90,7 @@ export function addShift(
     lock: Position | null;
     floater: boolean;
     role?: LeadRole | null;
+    roleLabel?: string;
   },
 ): DayState {
   const end = normalizeEnd(input.start, input.end);
@@ -101,6 +102,7 @@ export function addShift(
     lock: input.role ? null : input.lock,
     floater: input.role ? false : input.floater,
     role: input.role ?? null,
+    ...(input.role === "custom" && input.roleLabel?.trim() ? { roleLabel: input.roleLabel.trim() } : {}),
     breaks: defaultBreaks({ start: input.start, end }),
     breaksCustom: false,
   };

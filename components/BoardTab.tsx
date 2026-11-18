@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
-import { LEAD_LABEL, Position, POSITIONS, POSITION_LABEL, Shift } from "@/lib/types";
+import { Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
 import {
@@ -143,7 +143,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         <div className="lead-strip">
           {leads.map((s) => (
             <span key={s.id} className="badge">
-              {s.role ? LEAD_LABEL[s.role] : "Lead"} · {s.name || "?"} · {fmtShort(s.start)}–{fmtShort(s.end)}
+              {roleName(s) || "Lead"} · {s.name || "?"} · {fmtShort(s.start)}–{fmtShort(s.end)}
             </span>
           ))}
         </div>
@@ -286,7 +286,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
                   {s.name} <span className="muted">· {b.length} min</span>
                   {s.role && (
                     <span className="badge" style={{ marginLeft: 6 }}>
-                      {LEAD_LABEL[s.role]}
+                      {roleName(s)}
                     </span>
                   )}
                 </strong>
