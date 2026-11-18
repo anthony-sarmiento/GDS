@@ -205,6 +205,28 @@ describe("break cover", () => {
   });
 });
 
+describe("no automatic cover", () => {
+  it("does not move anyone over by itself when a break is on the board", () => {
+    const day = quietDay();
+    const c = h(14);
+    const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, c)]?.pos === "dungeon" && s.start <= c && c < s.end)!;
+    const placed = placeBreak(day, holder.id, c, 20);
+    // deal the whole day again with the break in place
+    const redealt = { ...placed.day, cells: autoFill({ ...placed.day, cells: {} }, S) };
+    const at = (t: number) => staffAt(redealt, S, t);
+    // the holder is on break, nobody was sent to cover: the position is open until the lead picks someone
+    const during = at(h(14, 5));
+    const everyone = during.front.length + during.bar.length + during.dungeon.length;
+    expect(everyone).toBeGreaterThan(0);
+    expect(during.dungeon.some((s) => s.id === holder.id)).toBe(false);
+    expect(Object.values(redealt.cells).some((cell) => cell.cover)).toBe(false);
+    // and everyone else stays put for the rest of that rotation block instead of shuffling to cover
+    for (const s of redealt.shifts.filter((x) => !x.role && x.id !== holder.id && x.start <= h(14, 5) && h(14, 30) < x.end)) {
+      expect(redealt.cells[cellKey(s.id, h(14, 5))].pos).toBe(redealt.cells[cellKey(s.id, h(14, 30))].pos);
+    }
+  });
+});
+
 describe("choosing who covers", () => {
   function withBreak() {
     const day = quietDay();

@@ -57,43 +57,33 @@ export interface CoverAnalysis {
 }
 
 /**
- * Who could rotate onto the position while its holder is on this break, and what it costs.
- * Best first: GDS's own pick (floater, then anyone their position can spare), then people whose
- * position stays fully staffed, then ones it leaves short, then ones it would leave empty.
+ * Everyone who could rotate onto `position` for `spanCells` (the person at `excludeId` is leaving it),
+ * and what it costs. Best first: GDS's own pick (floater, then anyone their position can spare),
+ * then people whose position stays fully staffed, then ones it leaves short, then ones it would
+ * leave empty. GDS never applies the pick by itself; it is only a suggestion.
  */
-export function analyzeCover(input: DayState, settings: Settings, shiftId: string, breakId: string): CoverAnalysis {
-  const day = clearCover(input, breakId);
-  const empty: CoverAnalysis = { position: null, span: null, spanCells: [], remaining: 0, min: 0, needs: false, options: [] };
-
-  const shift = day.shifts.find((s) => s.id === shiftId);
-  const brk = shift?.breaks.find((b) => b.id === breakId);
-  if (!shift || !brk || shift.role) return empty;
-  const span = breakSpan(brk);
-  if (!span) return empty;
-
+export function coverOptions(
+  day: DayState,
+  settings: Settings,
+  position: Position,
+  spanCells: number[],
+  excludeId: string,
+): Pick<CoverAnalysis, "remaining" | "min" | "needs" | "options"> {
   const g = settings.gridMinutes;
-  const spanCells = cellsFor(day.shifts, settings).filter(
-    (c) => c < span[1] && c + g > span[0] && isPresent(shift, c, g),
-  );
   const c0 = spanCells[0];
-  if (c0 == null) return empty;
-  const position = day.cells[cellKey(shift.id, c0)]?.pos;
-  // on a custom block (or nothing at all): no position to cover
-  if (!position || position === "other") return empty;
-
   const posOf = (s: Shift): Position | undefined => {
     const p = day.cells[cellKey(s.id, c0)]?.pos;
     return p === "other" ? undefined : p;
   };
   const working = rotating(day.shifts).filter(
-    (s) => s.id !== shift.id && s.sentHomeAt == null && isPresent(s, c0, g) && !breakAtCell(s, c0, g),
+    (s) => s.id !== excludeId && s.sentHomeAt == null && isPresent(s, c0, g) && !breakAtCell(s, c0, g),
   );
   const countAt = (p: Position) => working.filter((s) => posOf(s) === p).length;
   const remaining = countAt(position);
   const min = settings.limits[position].min;
   const needs = remaining < min;
 
-  // free for the whole break and not already on this position
+  // free for the whole span and not already on this position
   const options: CoverOption[] = working
     .filter((s) => {
       const from = posOf(s);
@@ -122,7 +112,31 @@ export function analyzeCover(input: DayState, settings: Settings, shiftId: strin
       harmRank[a.harm] - harmRank[b.harm] ||
       Number(b.shift.floater) - Number(a.shift.floater),
   );
-  return { position, span, spanCells, remaining, min, needs, options };
+  return { remaining, min, needs, options };
+}
+
+/** Who could rotate over while the holder of this break is away, and what it costs. */
+export function analyzeCover(input: DayState, settings: Settings, shiftId: string, breakId: string): CoverAnalysis {
+  const day = clearCover(input, breakId);
+  const empty: CoverAnalysis = { position: null, span: null, spanCells: [], remaining: 0, min: 0, needs: false, options: [] };
+
+  const shift = day.shifts.find((s) => s.id === shiftId);
+  const brk = shift?.breaks.find((b) => b.id === breakId);
+  if (!shift || !brk || shift.role) return empty;
+  const span = breakSpan(brk);
+  if (!span) return empty;
+
+  const g = settings.gridMinutes;
+  const spanCells = cellsFor(day.shifts, settings).filter(
+    (c) => c < span[1] && c + g > span[0] && isPresent(shift, c, g),
+  );
+  const c0 = spanCells[0];
+  if (c0 == null) return empty;
+  const position = day.cells[cellKey(shift.id, c0)]?.pos;
+  // on a custom block (or nothing at all): no position to cover
+  if (!position || position === "other") return empty;
+
+  return { position, span, spanCells, ...coverOptions(day, settings, position, spanCells, shift.id) };
 }
 
 /**
