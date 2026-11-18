@@ -2137,3 +2137,70 @@ button,
   text-decoration-color: rgba(148, 163, 214, 0.5);
   text-underline-offset: 3px;
 }
+
+/* ---------- who covers? ---------- */
+.cover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.cover-opt {
+  --pos: var(--muted);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  text-align: left;
+  background: var(--navy-900);
+  border: 2px solid var(--navy-600);
+  border-left: 6px solid var(--pos);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  min-height: 52px;
+}
+
+.cover-opt:hover {
+  background: var(--navy-700);
+}
+
+.cover-opt[aria-checked="true"] {
+  border-color: var(--green);
+  border-left-color: var(--green);
+  background: rgba(70, 230, 60, 0.1);
+}
+
+.cover-opt.none {
+  border-left-color: var(--navy-600);
+}
+
+.cover-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.cover-from {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.cover-effect {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.cover-effect.ok {
+  color: var(--green);
+}
+.cover-effect.warn {
+  color: var(--warn);
+}
+.cover-effect.bad {
+  color: var(--danger);
+}

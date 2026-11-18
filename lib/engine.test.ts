@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, assignRange, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
-import { assignCover, suggestMover } from "./cover";
+import { analyzeCover, assignCover, suggestMover } from "./cover";
 import { DayState, DEFAULT_SETTINGS, Position, roleName } from "./types";
 
 const h = (hr: number, m = 0) => hr * 60 + m;
@@ -202,6 +202,55 @@ describe("break cover", () => {
     day = assignCover(placed.day, S, alex.id, placed.breakId!).day;
     day = eraseCells(day, S, alex.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
     expect(Object.values(day.cells).some((c) => c.cover === placed.breakId)).toBe(false);
+  });
+});
+
+describe("choosing who covers", () => {
+  function withBreak() {
+    const day = quietDay();
+    const c = h(14);
+    // a person who is the only one on the Dungeon, so their break needs a cover
+    const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, c)]?.pos === "dungeon" && s.start <= c && c < s.end)!;
+    const placed = placeBreak(day, holder.id, c, 20);
+    return { day: placed.day, holder, breakId: placed.breakId! };
+  }
+
+  it("lists everyone who could rotate over and says what it costs", () => {
+    const { day, holder, breakId } = withBreak();
+    const a = analyzeCover(day, S, holder.id, breakId);
+    expect(a.position).toBe("dungeon");
+    expect(a.needs).toBe(true);
+    expect(a.options.length).toBeGreaterThan(0);
+    expect(a.options.filter((o) => o.recommended)).toHaveLength(1);
+    expect(a.options[0].recommended).toBe(true);
+    for (const o of a.options) expect(o.shift.id).not.toBe(holder.id);
+  });
+
+  it("puts the person you picked on the position, not GDS's pick", () => {
+    const { day, holder, breakId } = withBreak();
+    const a = analyzeCover(day, S, holder.id, breakId);
+    const other = a.options.find((o) => !o.recommended)!;
+    const res = assignCover(day, S, holder.id, breakId, other.shift.id);
+    expect(res.status).toBe("covered");
+    expect(res.cover!.id).toBe(other.shift.id);
+    expect(res.day.cells[cellKey(other.shift.id, h(14, 5))]).toMatchObject({ pos: "dungeon", pinned: true, cover: breakId });
+  });
+
+  it("covers nobody when you say nobody", () => {
+    const { day, holder, breakId } = withBreak();
+    const res = assignCover(day, S, holder.id, breakId, null);
+    expect(res.cover).toBeNull();
+    expect(["short", "uncovered"]).toContain(res.status);
+    expect(Object.values(res.day.cells).some((c) => c.cover === breakId)).toBe(false);
+  });
+
+  it("does not need a cover for a lead, who has no position", () => {
+    const day = typicalDay();
+    const lead = day.shifts.find((s) => s.role)!;
+    const placed = placeBreak(day, lead.id, h(13), 30);
+    const a = analyzeCover(placed.day, S, lead.id, placed.breakId!);
+    expect(a.position).toBeNull();
+    expect(a.options).toHaveLength(0);
   });
 });
 
