@@ -104,6 +104,21 @@ h3 {
   margin-top: 4px;
 }
 
+.undo-group {
+  display: flex;
+  gap: 6px;
+}
+
+.undo-group .btn {
+  min-width: 44px;
+  justify-content: center;
+}
+
+.undo-group .btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .datebar {
   display: flex;
   align-items: center;
@@ -1519,6 +1534,33 @@ button,
     gap: 10px;
     margin-right: 0;
     width: 100%;
+    order: 1;
+  }
+
+  .datebar {
+    order: 2;
+  }
+
+  /* the clock chip and Undo / Redo share the third row */
+  .clock {
+    order: 3;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+
+  .undo-group {
+    order: 4;
+  }
+
+  .undo-group .undo-text {
+    display: none;
+  }
+
+  .undo-group .btn {
+    width: 46px;
+    font-size: 1.25rem;
+    padding: 0;
   }
 
   .brand img {
@@ -1544,7 +1586,6 @@ button,
   }
 
   .clock {
-    width: 100%;
     justify-content: space-between;
   }
 

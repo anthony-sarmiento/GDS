@@ -31,6 +31,7 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
   - *Bump out*: send someone home and hand their position to the next shift. The replacement is pinned to that position for the rest of the block.
 - **Breaks tab** – the paper break log, live. *Print log* gives a landscape page with clock in/out, break length, start/end, initials and notes. Grey times are planned; write in the real ones.
 - **On a phone**: bottom tab bar, a sticky brush bar with a **Pan** mode for scrolling and a **Now** button, a narrow name column, the break log as one card per break, and dialogs that slide up as a sheet. With a brush picked, a sideways drag paints and an up/down drag still scrolls the page.
+- **Undo / Redo** (top of the page, or `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z`): steps back and forward through changes to the day you are viewing: painting, assignments, breaks and covers, bump outs, and team edits. A quick burst of typing counts as one step. History is kept for this visit only (a reload starts fresh) and does not include settings.
 - **Clock chip (top right)** – click it to preview the board at another time. *Back to live* resets it.
 
 ### Cover rule

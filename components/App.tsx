@@ -16,6 +16,7 @@ import { emptyDay, initialState, loadState, refresh, rememberName, saveState } f
 import { breakStatus } from "@/lib/breaks";
 import { cellKey, cellsFor, isPresent, rotating } from "@/lib/rotation";
 import { Ctx, CoverPrompt } from "./ctx";
+import { emptyHistory, History, recordChange, stepBack, stepForward } from "@/lib/history";
 import CoverDialog from "./CoverDialog";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
@@ -60,6 +61,14 @@ export default function App() {
   const now = preview ?? (live ? operatingMinutes(clock) : null);
   const nowRef = useRef<number | null>(now);
   nowRef.current = now;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // undo / redo, kept per day and only for this visit (a reload starts fresh)
+  const histRef = useRef<Record<string, History<DayState>>>({});
+  const [, bumpHistory] = useState(0);
+  const hist = histRef.current[date] ?? emptyHistory<DayState>();
+  const sameDay = (a: DayState, b: DayState) => a === b || JSON.stringify(a) === JSON.stringify(b);
 
   const flash = useCallback((msg: string) => {
     setToast(msg);
@@ -68,6 +77,11 @@ export default function App() {
 
   const mutate: Ctx["mutate"] = useCallback(
     (fn, opts) => {
+      if (opts?.record !== false) {
+        const before = stateRef.current.days[date] ?? emptyDay(date);
+        histRef.current[date] = recordChange(histRef.current[date] ?? emptyHistory<DayState>(), before, Date.now());
+        bumpHistory((n) => n + 1);
+      }
       setState((prev) => {
         const base = prev.days[date] ?? emptyDay(date);
         let next = fn(base);
@@ -110,9 +124,50 @@ export default function App() {
     const gaps = cellsFor(day.shifts, state.settings).some((c) =>
       rotating(day.shifts).some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
     );
-    if (gaps) mutate((d) => d, { auto: true });
+    if (gaps) mutate((d) => d, { auto: true, record: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, date, day.shifts.length]);
+
+  const undo = useCallback(() => {
+    const current = stateRef.current.days[date] ?? emptyDay(date);
+    const { history, state: snap } = stepBack(histRef.current[date] ?? emptyHistory<DayState>(), current, sameDay);
+    histRef.current[date] = history;
+    bumpHistory((n) => n + 1);
+    if (!snap) return;
+    setState((prev) => ({ ...prev, days: { ...prev.days, [date]: snap } }));
+    flash("Undid the last change");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, flash]);
+
+  const redo = useCallback(() => {
+    const current = stateRef.current.days[date] ?? emptyDay(date);
+    const { history, state: snap } = stepForward(histRef.current[date] ?? emptyHistory<DayState>(), current, sameDay);
+    histRef.current[date] = history;
+    bumpHistory((n) => n + 1);
+    if (!snap) return;
+    setState((prev) => ({ ...prev, days: { ...prev.days, [date]: snap } }));
+    flash("Redid the change");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, flash]);
+
+  // Ctrl/Cmd+Z undoes, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes. Text boxes keep their own typing undo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   const ctx: Ctx = useMemo(
     () => ({ state, day, settings: state.settings, now, live: live && preview == null, mutate, setSettings, remember, flash, askCover: setCoverPrompt }),
@@ -147,6 +202,27 @@ export default function App() {
             <h1>GDS</h1>
             <span>Geek&rsquo;d Deployment System</span>
           </div>
+        </div>
+
+        <div className="undo-group" role="group" aria-label="Undo and redo">
+          <button
+            className="btn"
+            onClick={undo}
+            disabled={hist.undo.length === 0}
+            title="Undo the last change (Ctrl+Z)"
+            aria-label="Undo"
+          >
+            ↶ <span className="undo-text">Undo</span>
+          </button>
+          <button
+            className="btn ghost"
+            onClick={redo}
+            disabled={hist.redo.length === 0}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"
+          >
+            ↷ <span className="undo-text">Redo</span>
+          </button>
         </div>
 
         <div className="datebar">

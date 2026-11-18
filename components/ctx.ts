@@ -32,7 +32,7 @@ export interface Ctx {
    */
   mutate: (
     fn: (day: DayState) => DayState,
-    opts?: { auto?: boolean | "cells" | "fill" },
+    opts?: { auto?: boolean | "cells" | "fill"; /** false = not an undo step (automatic housekeeping) */ record?: boolean },
   ) => void;
   setSettings: (patch: Partial<Settings>) => void;
   /** Remember a typed name for autocomplete. */
