@@ -383,6 +383,26 @@ describe("custom positions", () => {
   });
 });
 
+describe("edges of a shift", () => {
+  it("keeps a break inside the shift when it is dropped at the edge", () => {
+    const day = quietDay();
+    const alex = day.shifts.find((s) => s.name === "Alex")!; // 11:00 - 5:00
+    const late = placeBreak(day, alex.id, h(16, 55), 20).day.shifts.find((s) => s.id === alex.id)!;
+    const b = late.breaks.find((x) => x.planned != null)!;
+    expect(b.planned! + b.length).toBeLessThanOrEqual(alex.end);
+    const early = placeBreak(day, alex.id, h(10, 30), null).day.shifts.find((s) => s.id === alex.id)!;
+    expect(early.breaks.find((x) => x.planned != null)!.planned).toBeGreaterThanOrEqual(alex.start);
+  });
+
+  it("only paints the columns the person is working", () => {
+    let day = quietDay();
+    const dee = day.shifts.find((s) => s.name === "Dee")!; // 5:00 PM start
+    day = assignRange(day, S, dee.id, h(16, 30), h(17, 30), "bar");
+    expect(day.cells[cellKey(dee.id, h(16, 30))]).toBeUndefined();
+    expect(day.cells[cellKey(dee.id, h(17))]).toMatchObject({ pos: "bar", pinned: true });
+  });
+});
+
 describe("precision", () => {
   it("places a 20 minute break on exact minutes", () => {
     let day = typicalDay();
