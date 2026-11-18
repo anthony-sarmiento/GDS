@@ -8,13 +8,14 @@ import { requiredBreaks } from "@/lib/breaks";
 import { fmt, fmtHours, fromInput, hoursOf, normalizeEnd, toInput } from "@/lib/time";
 
 const PRESETS: { label: string; start: string; end: string; floater?: boolean }[] = [
-  { label: "Opener 10–5", start: "10:00", end: "17:00" },
+  { label: "Lead opener 10–5:15", start: "10:00", end: "17:15" },
+  { label: "Opener 11–5", start: "11:00", end: "17:00" },
   { label: "Closer 5–11", start: "17:00", end: "23:00" },
   { label: "Closer 5–12", start: "17:00", end: "00:00" },
   { label: "Floater 1–9", start: "13:00", end: "21:00", floater: true },
 ];
 
-const ROTATION_CHOICES = [30, 45, 60, 90, 120];
+const ROTATION_CHOICES = [30, 60, 90, 120];
 
 function breakSummary(start: number, end: number) {
   const lens = requiredBreaks(hoursOf(start, end));
@@ -25,7 +26,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
   const { day, settings, state, mutate, setSettings, remember, flash } = ctx;
 
   const [name, setName] = useState("");
-  const [start, setStart] = useState("10:00");
+  const [start, setStart] = useState("11:00");
   const [end, setEnd] = useState("17:00");
   const [lock, setLock] = useState<Position | "">("");
   const [floater, setFloater] = useState(false);
@@ -213,6 +214,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: "0.8rem" }}>
                 {fmtHours(hoursOf(s.start, s.end))} · {fmt(s.start)}–{fmt(s.end)}
+                {s.sentHomeAt != null && " · sent home"}
                 <br />
                 Breaks: {s.breaks.length ? s.breaks.map((b) => `${b.length}m`).join(" + ") : "none"}
                 {!s.breaksCustom && s.breaks.length === 0 ? ` (rule: ${breakSummary(s.start, s.end)})` : ""}
@@ -235,14 +237,25 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
       </div>
       <div className="card settings-grid">
         <label className="lbl">
-          Rotate positions every
+          Board columns
+          <select
+            className="field"
+            value={settings.gridMinutes}
+            onChange={(e) => {
+              setSettings({ gridMinutes: Number(e.target.value) });
+              flash("Board rebuilt for this day");
+            }}
+          >
+            <option value={30}>30 minutes</option>
+            <option value={15}>15 minutes</option>
+          </select>
+        </label>
+        <label className="lbl">
+          Auto-rotate every
           <select
             className="field"
             value={settings.rotationMinutes}
-            onChange={(e) => {
-              setSettings({ rotationMinutes: Number(e.target.value) });
-              flash("Rotation re-dealt for this day");
-            }}
+            onChange={(e) => setSettings({ rotationMinutes: Number(e.target.value) })}
           >
             {ROTATION_CHOICES.map((m) => (
               <option key={m} value={m}>
@@ -252,7 +265,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
           </select>
         </label>
         <label className="lbl">
-          Rotation clock starts at
+          Board starts at
           <input
             type="time"
             className="field"
@@ -275,6 +288,52 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             <option value={3}>3</option>
           </select>
         </label>
+      </div>
+
+      <div className="section-title">
+        <h2>Staffing (SOP)</h2>
+        <p>How many people belong on each position. Auto-deal follows this, and the board flags anything short.</p>
+      </div>
+      <div className="card settings-grid">
+        {POSITIONS.map((p) => (
+          <div key={p} className={`pos-${p}`}>
+            <div style={{ color: "var(--pos)", fontFamily: "var(--font-display)", textTransform: "uppercase", marginBottom: 8 }}>
+              {POSITION_LABEL[p]}
+            </div>
+            <div className="row">
+              <label className="lbl">
+                At least
+                <input
+                  type="number"
+                  className="field"
+                  style={{ width: 80 }}
+                  min={0}
+                  max={6}
+                  value={settings.limits[p].min}
+                  onChange={(e) => {
+                    const min = Math.max(0, Math.min(6, Number(e.target.value) || 0));
+                    setSettings({ limits: { ...settings.limits, [p]: { min, max: Math.max(min, settings.limits[p].max) } } });
+                  }}
+                />
+              </label>
+              <label className="lbl">
+                At most
+                <input
+                  type="number"
+                  className="field"
+                  style={{ width: 80 }}
+                  min={1}
+                  max={8}
+                  value={settings.limits[p].max}
+                  onChange={(e) => {
+                    const max = Math.max(1, Math.min(8, Number(e.target.value) || 1));
+                    setSettings({ limits: { ...settings.limits, [p]: { min: Math.min(settings.limits[p].min, max), max } } });
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -38,6 +38,10 @@ export interface Shift {
   breaks: Brk[];
   /** The break list was edited by hand, so don't regenerate it when the shift times change. */
   breaksCustom: boolean;
+  /** Set when the lead bumped this person out: the time they were sent home. */
+  sentHomeAt?: number;
+  /** Name of the person who took over (for the board label). */
+  bumpedBy?: string;
 }
 
 export interface Cell {
@@ -51,17 +55,26 @@ export interface DayState {
   opener: string;
   closer: string;
   shifts: Shift[];
-  /** key = `${shiftId}@${slotStartMinute}` */
+  /** key = `${shiftId}@${cellStartMinute}`; one cell per grid column the person is working. */
   cells: Record<string, Cell>;
 }
 
+/** SOP staffing for one position: how many people should be on it at once. */
+export interface Limits {
+  min: number;
+  max: number;
+}
+
 export interface Settings {
-  /** Minutes between rotations. */
+  /** Minutes between automatic rotations. */
   rotationMinutes: number;
-  /** Rotation grid is anchored to this time (default store open, 10:00). */
+  /** Width of one column on the board (15 or 30). Positions are painted at this resolution. */
+  gridMinutes: number;
+  /** The grid is anchored to this time (default 10:00, when the lead opens). */
   anchor: number;
   /** How many people may be on break at the same time. */
   maxConcurrentBreaks: number;
+  limits: Record<Position, Limits>;
 }
 
 export interface AppState {
@@ -71,8 +84,16 @@ export interface AppState {
   days: Record<string, DayState>;
 }
 
+export const DEFAULT_LIMITS: Record<Position, Limits> = {
+  front: { min: 1, max: 2 },
+  bar: { min: 2, max: 3 },
+  dungeon: { min: 1, max: 1 },
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   rotationMinutes: 60,
+  gridMinutes: 30,
   anchor: 10 * 60,
   maxConcurrentBreaks: 1,
+  limits: DEFAULT_LIMITS,
 };

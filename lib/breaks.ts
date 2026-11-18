@@ -118,6 +118,8 @@ export function planBreaks(
   const placed = new Map<string, number>();
   const occupied = [...fixed];
 
+  // Fewer people than the SOP minimum on the floor counts as "thin".
+  const needOnFloor = POSITIONS.reduce((n, p) => n + settings.limits[p].min, 0);
   const presentAt = (t: number) => day.shifts.filter((s) => s.start <= t && t < s.end).length;
   const breakingAt = (t: number, extra: Interval) =>
     [...occupied, extra].filter((i) => i.start <= t && t < i.end).length;
@@ -143,7 +145,7 @@ export function planBreaks(
             ok = false;
             break;
           }
-          if (presentAt(x) - breaking < POSITIONS.length) thin += 1;
+          if (presentAt(x) - breaking < needOnFloor) thin += 1;
         }
         if (!ok) continue;
         const score = Math.abs(t - target) + thin * 60;
