@@ -14,7 +14,7 @@ import {
 } from "@/lib/time";
 import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
 import { planBreaks, breakStatus } from "@/lib/breaks";
-import { cellKey, isPresent, slotsFor } from "@/lib/rotation";
+import { cellKey, cellsFor, isPresent } from "@/lib/rotation";
 import { Ctx } from "./ctx";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
@@ -72,7 +72,7 @@ export default function App() {
         if (opts?.replanBreaks) {
           next = planBreaks(next, prev.settings, { replanAll: true, notBefore: nowRef.current ?? -Infinity });
         }
-        if (opts?.auto) next = refresh(next, prev, nowRef.current);
+        if (opts?.auto) next = refresh(next, prev, nowRef.current, opts.auto === "fill" ? "fill" : opts.auto === "cells" ? "cells" : "redeal");
         return { ...prev, days: { ...prev.days, [date]: next } };
       });
     },
@@ -84,17 +84,23 @@ export default function App() {
       setState((prev) => {
         const settings = { ...prev.settings, ...patch };
         const gridChanged =
-          settings.rotationMinutes !== prev.settings.rotationMinutes || settings.anchor !== prev.settings.anchor;
+          settings.gridMinutes !== prev.settings.gridMinutes || settings.anchor !== prev.settings.anchor;
         const base = prev.days[date] ?? emptyDay(date);
-        let next: AppState = { ...prev, settings };
+        const next: AppState = { ...prev, settings };
+        let day = base;
         if (gridChanged) {
-          // old block keys no longer line up, so deal the viewed day again from scratch
-          const cleared = refresh({ ...base, cells: {} }, next, nowRef.current);
-          next = { ...next, days: { ...prev.days, [date]: cleared } };
+          // old column keys no longer line up, so deal the viewed day again from scratch
+          day = refresh({ ...base, cells: {} }, next, nowRef.current);
+        } else if (patch.rotationMinutes !== undefined || patch.limits !== undefined) {
+          day = refresh(base, next, nowRef.current);
         } else if (patch.maxConcurrentBreaks !== undefined) {
-          next = { ...next, days: { ...prev.days, [date]: planBreaks(base, settings, { replanAll: true, notBefore: nowRef.current ?? -Infinity }) } };
+          day = refresh(
+            planBreaks(base, settings, { replanAll: true, notBefore: nowRef.current ?? -Infinity }),
+            next,
+            nowRef.current,
+          );
         }
-        return next;
+        return { ...next, days: { ...prev.days, [date]: day } };
       });
     },
     [date],
@@ -107,9 +113,9 @@ export default function App() {
   // A day opened later (or after changing block length) may have blocks with no position yet.
   useEffect(() => {
     if (!hydrated || !day.shifts.length) return;
-    const step = state.settings.rotationMinutes;
-    const gaps = slotsFor(day.shifts, state.settings).some((slot) =>
-      day.shifts.some((s) => isPresent(s, slot, step) && !day.cells[cellKey(s.id, slot)]),
+    const g = state.settings.gridMinutes;
+    const gaps = cellsFor(day.shifts, state.settings).some((c) =>
+      day.shifts.some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
     );
     const unplaced = day.shifts.some((s) => s.breaks.some((b) => b.planned == null && b.start == null));
     if (gaps || unplaced) mutate((d) => d, { auto: true });

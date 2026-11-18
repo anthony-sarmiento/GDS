@@ -3,7 +3,7 @@
 import { Ctx, FIRST_NAME } from "./ctx";
 import { Brk, POSITION_LABEL, Shift } from "@/lib/types";
 import { SHIFT_RULES, breakStatus, effectiveStart } from "@/lib/breaks";
-import { coverFor } from "@/lib/rotation";
+import { breakImpact } from "@/lib/rotation";
 import { addBreak, endBreak, removeBreak, resetBreak, startBreak, updateBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fromInput, toInput } from "@/lib/time";
 
@@ -56,7 +56,7 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
         <button
           className="btn"
           onClick={() => {
-            mutate((d) => d, { replanBreaks: true });
+            mutate((d) => d, { replanBreaks: true, auto: "cells" });
             flash("Breaks re-planned (taken and hand-set breaks kept)");
           }}
         >
@@ -181,14 +181,18 @@ function ShiftRows({ ctx, shift }: { ctx: Ctx; shift: Shift }) {
 function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; brk: Brk; first: boolean; last: boolean }) {
   const { day, settings, now, mutate } = ctx;
   const status = breakStatus(brk);
-  const patch = (p: Partial<Brk>) => mutate((d) => updateBreak(d, shift.id, brk.id, p));
+  const patch = (p: Partial<Brk>) =>
+    mutate((d) => updateBreak(d, shift.id, brk.id, p), {
+      // anything that moves the break changes who is on the floor, so re-deal the board
+      auto: "planned" in p || "start" in p || "end" in p || "length" in p ? "cells" : undefined,
+    });
   const time = (v: string) => {
     const m = fromInput(v);
     return m == null ? null : alignAfter(m, shift.start);
   };
 
   const at = effectiveStart(brk);
-  const plan = status === "scheduled" && at != null ? coverFor(day, settings, shift, at) : null;
+  const impact = status === "scheduled" && at != null ? breakImpact(day, settings, shift, at) : null;
   const overdue = status === "scheduled" && now != null && at != null && now - at > 15;
 
   return (
@@ -196,14 +200,12 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
       <td className="name">
         {shift.name || "(no name)"}
         {first && shift.floater && <small>Floater</small>}
-        {plan?.status === "cover" && plan.cover && (
-          <small>
-            Cover {plan.position ? POSITION_LABEL[plan.position] : ""}: {FIRST_NAME(plan.cover.name)}
+        {impact && impact.position && (impact.status === "short" || impact.status === "open") && (
+          <small style={{ color: impact.status === "open" ? "var(--danger)" : "var(--warn)" }}>
+            {POSITION_LABEL[impact.position]} drops to {impact.remaining} (needs {impact.min})
           </small>
         )}
-        {plan?.status === "uncovered" && (
-          <small style={{ color: "var(--danger)" }}>{plan.position ? POSITION_LABEL[plan.position] : ""} uncovered</small>
-        )}
+        {shift.sentHomeAt != null && <small>Sent home {fmt(shift.sentHomeAt)}</small>}
       </td>
       <td>{fmt(shift.start)}</td>
       <td>
@@ -286,20 +288,20 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
       </td>
       <td className="no-print" style={{ whiteSpace: "nowrap" }}>
         {status === "active" ? (
-          <button className="btn primary small" disabled={now == null} onClick={() => now != null && mutate((d) => endBreak(d, shift.id, brk.id, now))}>
+          <button className="btn primary small" disabled={now == null} onClick={() => now != null && mutate((d) => endBreak(d, shift.id, brk.id, now), { auto: "cells" })}>
             End now
           </button>
         ) : status === "done" ? (
-          <button className="btn ghost small" onClick={() => mutate((d) => resetBreak(d, shift.id, brk.id))}>
+          <button className="btn ghost small" onClick={() => mutate((d) => resetBreak(d, shift.id, brk.id), { auto: "cells" })}>
             Undo
           </button>
         ) : (
-          <button className="btn small" disabled={now == null} title={now == null ? "Pick today, or preview a time, to stamp" : undefined} onClick={() => now != null && mutate((d) => startBreak(d, shift.id, brk.id, now))}>
+          <button className="btn small" disabled={now == null} title={now == null ? "Pick today, or preview a time, to stamp" : undefined} onClick={() => now != null && mutate((d) => startBreak(d, shift.id, brk.id, now), { auto: "cells" })}>
             Start now
           </button>
         )}
         {status === "active" && (
-          <button className="btn ghost small" onClick={() => mutate((d) => resetBreak(d, shift.id, brk.id))}>
+          <button className="btn ghost small" onClick={() => mutate((d) => resetBreak(d, shift.id, brk.id), { auto: "cells" })}>
             Undo
           </button>
         )}
@@ -307,7 +309,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           className="btn ghost small"
           aria-label="Remove this break"
           title="Remove this break"
-          onClick={() => mutate((d) => removeBreak(d, shift.id, brk.id))}
+          onClick={() => mutate((d) => removeBreak(d, shift.id, brk.id), { auto: "cells" })}
         >
           ✕
         </button>
