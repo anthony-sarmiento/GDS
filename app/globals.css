@@ -1194,7 +1194,7 @@ table.grid.tight {
 .tl-label {
   position: sticky;
   left: 0;
-  z-index: 6;
+  z-index: 10;
   flex: 0 0 var(--label);
   width: var(--label);
   background: var(--navy-800);
@@ -1229,6 +1229,7 @@ table.grid.tight {
 
 .tl-lane {
   position: relative;
+  isolation: isolate;
   flex: 0 0 auto;
   height: 52px;
   background-image:
@@ -1281,6 +1282,7 @@ table.grid.tight {
 
 .board.painting .tl-lane:not(.ruler):not(.sub):not(.cov-lane) {
   cursor: crosshair;
+  /* with a brush picked the row owns the touch, so a drag always paints. Pick Pan to scroll. */
   touch-action: none;
 }
 
@@ -1477,8 +1479,10 @@ button,
   touch-action: manipulation;
 }
 
-.palette-scroll {
-  display: contents;
+.zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 @media (hover: none) {
@@ -1624,6 +1628,22 @@ button,
   /* right now + timer */
   .person {
     padding: 10px 12px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .pos-card header {
+    flex-wrap: wrap;
+    gap: 2px 10px;
+  }
+
+  .q-main {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tl-label small.hide-compact {
+    display: none;
   }
 
   .person .btn {
@@ -1643,27 +1663,43 @@ button,
     position: sticky;
     top: 0;
     z-index: 30;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     margin: 0 -12px 8px;
     padding: 8px 12px;
     background: var(--navy-900);
     border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
   }
 
-  .palette::-webkit-scrollbar {
+  .palette > span[style] {
     display: none;
   }
 
-  .palette > * {
-    flex: 0 0 auto;
+  .palette .brush,
+  .palette > .btn {
+    min-height: 42px;
+    padding: 4px 2px;
+    justify-content: center;
+    font-size: 0.74rem;
+    letter-spacing: 0;
+    width: 100%;
   }
 
-  .brush {
-    min-height: 44px;
-    padding: 6px 12px;
+  .zoom-group {
+    display: flex;
+    gap: 6px;
+  }
+
+  .zoom-group .zoom-label {
+    display: none;
+  }
+
+  .zoom-group .btn {
+    flex: 1;
+    min-height: 42px;
+    padding: 0;
+    font-size: 1.1rem;
   }
 
   .palette-hint {
@@ -1712,10 +1748,6 @@ button,
     overscroll-behavior-x: contain;
   }
 
-  /* with a brush picked, a sideways drag paints and an up/down drag still scrolls the page */
-  .board.painting .tl-lane:not(.ruler):not(.sub):not(.cov-lane) {
-    touch-action: pan-y;
-  }
 
   .blk {
     top: 7px;
@@ -1829,9 +1861,23 @@ button,
 
   /* team tab */
   .shift-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
     padding: 14px 0;
+  }
+
+  .shift-row > *,
+  .row > *,
+  .settings-grid > * {
+    min-width: 0;
+  }
+
+  .field,
+  input[type="time"],
+  input[type="date"],
+  select.field {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .shift-row > :first-child {
@@ -1856,7 +1902,7 @@ button,
   }
 
   .settings-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   /* dialogs slide up from the bottom like a sheet */
