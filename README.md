@@ -19,19 +19,24 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
 
 ## How it works
 
-- **Team tab** – add people with clock in/out. Quick-fill buttons: Lead opener 10–5:15, Opener 11–5, Closer 5–11, Closer 5–12, Floater 1–9. Choose *Stays at …* for anyone who wants one spot all day. Settings hold the column size, auto-rotate interval and the SOP staffing limits.
-- **Board tab** (CDS style)
+- **Team tab** – add people with clock in/out. Quick-fill buttons: Opening Lead 10–5:15, Opener 11–5, Closer 5–11, Closer 5–12, Floater 1–9, Closing Lead, Inventory Lead. *Assignment* is Rotates, Stays at a position, or a lead role. **Leads are not on the board**: they have a role (Opening / Closing / Inventory Lead) and show up on the break log and break timer only.
+- **Board tab** (CDS style, minute precision)
   - *Right now*: who is on Front / Bar / Dungeon, who is on break, who is short, and who could move to cover. Each person has a **Bump** button.
   - *Break timer*: Start / End stamps real break times.
-  - *Board*: one row per person, one column per 30 minutes (15 in Settings). Pick a **brush** (keys `1` Front, `2` Bar, `3` Dungeon, `4` Break, `0` Erase, `Esc` to put it down), then click or drag across a row. Painted blocks are pinned (dot) and never move on their own. The **Break** brush puts a break at that spot, and dragging across columns sets its length. Break tiles go green while someone is actually on break.
-  - *Coverage*: people on each position per column. Red = open, amber = short or over the max.
+  - *Board*: a continuous timeline, one row per person, snapping to 5 minutes. Pick a **brush** (keys `1` Front, `2` Bar, `3` Dungeon, `4` Break, `0` Erase, `Esc` to put it down) and **drag across a row for an exact range**. A plain click repaints the whole block under the cursor. Neighbouring blocks on the same position merge into one. Painted ranges are pinned (thin underline) and never move on their own. Zoom with − / +.
+  - *Break brush*: drag to set the exact start and end of a break, or click to drop it at that minute using its normal length.
+  - *Coverage*: people on each position over the day. Red = empty, amber = short or over the max.
   - *Bump out*: send someone home and hand their position to the next shift. The replacement is pinned to that position for the rest of the block.
-- **Breaks tab** – the paper break log, live. Print it with *Print log*.
+- **Breaks tab** – the paper break log, live. *Print log* gives a landscape page with clock in/out, break length, start/end, initials and notes. Grey times are planned; write in the real ones.
 - **Clock chip (top right)** – click it to preview the board at another time. *Back to live* resets it.
 
-### Staffing (SOP)
+### Cover rule
 
-Front 1–2, Bar 2–3, Dungeon exactly 1 by default (editable in Team → Staffing). Auto-deal fills the minimums first (Front and Bar, then Dungeon), sends spare people to the Bar, and shifts someone over to cover when a break drops a position below its minimum.
+Someone has to be on a position while its holder is on break. When a break is placed or started, GDS moves a cover onto the position for the length of the break (the floater first, then anyone whose own position can spare them) and pins it. If the position would be left empty and nobody can move, it asks before going ahead. If it stays attended but below its minimum, the board shows it amber.
+
+### Staffing
+
+Front 1–2, Bar 2–3, Dungeon exactly 1 by default (editable in Team → Staffing). Auto-deal fills the minimums first (Front and Bar, then Dungeon) and sends spare people to the Bar.
 
 ### Break rules (from the paper log)
 
@@ -47,6 +52,7 @@ Break length is editable per break, and breaks can be added or removed. Rules li
 ### Engine notes
 
 - `lib/breaks.ts` – break rules and planner. Breaks are staggered (1 at a time by default), land near the middle of the shift, and prefer times when the floor is fully staffed.
-- `lib/rotation.ts` – the board solver. Per column it picks positions that meet the SOP limits, rotate at block boundaries (default hourly), stay put in between, and favor positions someone has spent the least time at. Painted columns are never touched.
+- `lib/rotation.ts` – the board solver. Per 5-minute column it picks positions that meet the staffing limits, rotate at block boundaries (default hourly), stay put in between, and favor positions someone has spent the least time at. Painted columns are never touched.
+- `lib/cover.ts` – the cover rule for breaks.
 - `lib/store.ts` – state helpers: painting, break placement, bump out.
 - "Board starts at" (default 10:00 AM) anchors the columns and rotation blocks.

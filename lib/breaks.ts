@@ -60,6 +60,8 @@ const MIN_GAP_SAME_PERSON = 90;
 
 interface Interval {
   shiftId: string;
+  /** Leads are not on a position, so their breaks never need cover. */
+  lead: boolean;
   start: number;
   end: number;
 }
@@ -102,7 +104,7 @@ export function planBreaks(
       const isFixed = brk.start != null || brk.locked || (!replanAll && brk.planned != null);
       if (isFixed) {
         const s = effectiveStart(brk);
-        if (s != null) fixed.push({ shiftId: shift.id, start: s, end: s + (brk.end != null && brk.start != null ? brk.end - brk.start : brk.length) });
+        if (s != null) fixed.push({ shiftId: shift.id, lead: !!shift.role, start: s, end: s + (brk.end != null && brk.start != null ? brk.end - brk.start : brk.length) });
       } else {
         todo.push({ shift, brk, index, count: shift.breaks.length });
       }
@@ -120,9 +122,9 @@ export function planBreaks(
 
   // Fewer people than the SOP minimum on the floor counts as "thin".
   const needOnFloor = POSITIONS.reduce((n, p) => n + settings.limits[p].min, 0);
-  const presentAt = (t: number) => day.shifts.filter((s) => s.start <= t && t < s.end).length;
+  const presentAt = (t: number) => day.shifts.filter((s) => !s.role && s.start <= t && t < s.end).length;
   const breakingAt = (t: number, extra: Interval) =>
-    [...occupied, extra].filter((i) => i.start <= t && t < i.end).length;
+    [...occupied, extra].filter((i) => !i.lead && i.start <= t && t < i.end).length;
 
   for (const item of todo) {
     const { shift, brk } = item;
@@ -130,32 +132,39 @@ export function planBreaks(
     const target = targetOf(item);
     const mine = occupied.filter((i) => i.shiftId === shift.id);
 
-    let best: { t: number; score: number } | null = null;
-    for (let extra = 0; extra <= 3 && !best; extra += 1) {
-      const cap = settings.maxConcurrentBreaks + extra;
-      for (let t = Math.max(lo, ceilTo(notBefore, GRID)); t <= hi; t += GRID) {
-        const cand: Interval = { shiftId: shift.id, start: t, end: t + brk.length };
-        // keep a person's own breaks well apart
-        if (mine.some((m) => t < m.end + MIN_GAP_SAME_PERSON && m.start < cand.end + MIN_GAP_SAME_PERSON)) continue;
-        let ok = true;
-        let thin = 0;
-        for (let x = t; x < cand.end; x += GRID) {
-          const breaking = breakingAt(x, cand);
-          if (breaking > cap) {
-            ok = false;
-            break;
+    let best = null as { t: number; score: number } | null;
+    // Prefer times where someone else can cover (floor stays at or above the minimum),
+    // and only fall back to thin times when there is no other choice.
+    for (const hard of shift.role ? [false] : [true, false]) {
+      for (let extra = 0; extra <= 3 && !best; extra += 1) {
+        const cap = settings.maxConcurrentBreaks + extra;
+        for (let t = Math.max(lo, ceilTo(notBefore, GRID)); t <= hi; t += GRID) {
+          const cand: Interval = { shiftId: shift.id, lead: !!shift.role, start: t, end: t + brk.length };
+          // keep a person's own breaks well apart
+          if (mine.some((m) => t < m.end + MIN_GAP_SAME_PERSON && m.start < cand.end + MIN_GAP_SAME_PERSON)) continue;
+          let ok = true;
+          let thin = 0;
+          if (!shift.role) {
+            for (let x = t; x < cand.end; x += GRID) {
+              const breaking = breakingAt(x, cand);
+              if (breaking > cap) {
+                ok = false;
+                break;
+              }
+              if (presentAt(x) - breaking < needOnFloor) thin += 1;
+            }
           }
-          if (presentAt(x) - breaking < needOnFloor) thin += 1;
+          if (!ok || (hard && thin > 0)) continue;
+          const score = Math.abs(t - target) + thin * 60;
+          if (!best || score < best.score) best = { t, score };
         }
-        if (!ok) continue;
-        const score = Math.abs(t - target) + thin * 60;
-        if (!best || score < best.score) best = { t, score };
       }
+      if (best) break;
     }
 
     if (best) {
       placed.set(brk.id, best.t);
-      occupied.push({ shiftId: shift.id, start: best.t, end: best.t + brk.length });
+      occupied.push({ shiftId: shift.id, lead: !!shift.role, start: best.t, end: best.t + brk.length });
     }
   }
 

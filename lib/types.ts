@@ -8,6 +8,13 @@ export const POSITION_LABEL: Record<Position, string> = {
 };
 
 /** One break on the log. All times are minutes since midnight (can exceed 1440 for after-midnight). */
+export type LeadRole = "opening" | "closing" | "inventory";
+export const LEAD_LABEL: Record<LeadRole, string> = {
+  opening: "Opening Lead",
+  closing: "Closing Lead",
+  inventory: "Inventory Lead",
+};
+
 export interface Brk {
   id: string;
   /** Required length in minutes (20 / 30 / 45 / 60 ...). */
@@ -35,6 +42,8 @@ export interface Shift {
   lock: Position | null;
   /** Mid-shift floater who covers breaks. */
   floater: boolean;
+  /** Leads are not part of the rotation. They have a role instead of a position. */
+  role?: LeadRole | null;
   breaks: Brk[];
   /** The break list was edited by hand, so don't regenerate it when the shift times change. */
   breaksCustom: boolean;
@@ -48,6 +57,8 @@ export interface Cell {
   pos: Position;
   /** Set by hand; auto-rotate never moves it. */
   pinned: boolean;
+  /** This block exists to cover a break (the break's id). It goes away if the break does. */
+  cover?: string;
 }
 
 export interface DayState {
@@ -68,7 +79,7 @@ export interface Limits {
 export interface Settings {
   /** Minutes between automatic rotations. */
   rotationMinutes: number;
-  /** Width of one column on the board (15 or 30). Positions are painted at this resolution. */
+  /** Smallest step on the board in minutes. Everything is painted and placed at this precision. */
   gridMinutes: number;
   /** The grid is anchored to this time (default 10:00, when the lead opens). */
   anchor: number;
@@ -92,7 +103,7 @@ export const DEFAULT_LIMITS: Record<Position, Limits> = {
 
 export const DEFAULT_SETTINGS: Settings = {
   rotationMinutes: 60,
-  gridMinutes: 30,
+  gridMinutes: 5,
   anchor: 10 * 60,
   maxConcurrentBreaks: 1,
   limits: DEFAULT_LIMITS,

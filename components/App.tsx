@@ -14,7 +14,7 @@ import {
 } from "@/lib/time";
 import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
 import { planBreaks, breakStatus } from "@/lib/breaks";
-import { cellKey, cellsFor, isPresent } from "@/lib/rotation";
+import { cellKey, cellsFor, isPresent, rotating } from "@/lib/rotation";
 import { Ctx } from "./ctx";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
@@ -115,7 +115,7 @@ export default function App() {
     if (!hydrated || !day.shifts.length) return;
     const g = state.settings.gridMinutes;
     const gaps = cellsFor(day.shifts, state.settings).some((c) =>
-      day.shifts.some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
+      rotating(day.shifts).some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
     );
     const unplaced = day.shifts.some((s) => s.breaks.some((b) => b.planned == null && b.start == null));
     if (gaps || unplaced) mutate((d) => d, { auto: true });
@@ -137,7 +137,7 @@ export default function App() {
       <div className="shell">
         <div className="topbar">
           <div className="brand">
-            <Image src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={100} height={46} priority />
+            <Image src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={200} height={92} priority />
           </div>
         </div>
       </div>
@@ -150,7 +150,7 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <Image src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={100} height={46} priority />
+          <Image src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={200} height={92} priority />
           <div className="brand-text">
             <h1>GDS</h1>
             <span>Geek&rsquo;d Deployment System</span>

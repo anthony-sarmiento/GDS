@@ -83,20 +83,20 @@ h3 {
 }
 
 .brand img {
-  height: 46px;
+  height: 92px;
   width: auto;
   display: block;
 }
 
 .brand-text h1 {
-  font-size: 1.5rem;
+  font-size: 2.6rem;
   line-height: 1;
   color: var(--green);
 }
 
 .brand-text span {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
@@ -1171,6 +1171,280 @@ table.grid.tight {
   gap: 12px;
 }
 
+/* ---------- precise timeline ---------- */
+.tl {
+  position: relative;
+  --label: 200px;
+}
+
+.tl-row {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+.tl-row:last-of-type {
+  border-bottom: none;
+}
+
+.tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  flex: 0 0 var(--label);
+  width: var(--label);
+  background: var(--navy-800);
+  border-right: 1px solid var(--line);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 52px;
+}
+
+.tl-label small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.who-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.who-name {
+  font-weight: 700;
+}
+
+.tl-head .tl-label {
+  background: var(--navy-700);
+  min-height: 40px;
+}
+
+.tl-lane {
+  position: relative;
+  flex: 0 0 auto;
+  height: 52px;
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 214, 0.34) 1px, transparent 1px),
+    linear-gradient(to right, rgba(148, 163, 214, 0.1) 1px, transparent 1px);
+  background-size:
+    calc(var(--ppm) * 60px) 100%,
+    calc(var(--ppm) * 15px) 100%;
+}
+
+.tl-lane.ruler {
+  height: 40px;
+  background-color: var(--navy-700);
+}
+
+.tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding-left: 4px;
+  font-size: 0.66rem;
+  color: var(--muted);
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 3px;
+  pointer-events: none;
+}
+
+.tick.hour {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  align-items: flex-start;
+  padding-top: 3px;
+}
+
+.tick.quarter {
+  opacity: 0.8;
+}
+
+.tl-lane .off {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--navy-900);
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(148, 163, 214, 0.08) 6px 12px);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.board.painting .tl-lane:not(.ruler):not(.sub):not(.cov-lane) {
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.blk {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  overflow: hidden;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--navy-900);
+  background: var(--pos);
+  z-index: 1;
+}
+
+.blk-label {
+  pointer-events: none;
+}
+
+.pin-strip {
+  position: absolute;
+  bottom: 6px;
+  height: 4px;
+  background: rgba(3, 8, 24, 0.55);
+  border-radius: 0 0 6px 6px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.blk.brk {
+  z-index: 4;
+  top: 3px;
+  bottom: 3px;
+  background: repeating-linear-gradient(135deg, var(--break) 0 7px, #3aa9e0 7px 14px);
+  border: 1px solid #1b6f9c;
+}
+
+.blk.brk.active {
+  background: var(--green);
+  border-color: var(--green-dim);
+  animation: glow 1.6s ease-in-out infinite;
+}
+
+.blk.brk.done {
+  background: var(--navy-700);
+  border-color: var(--navy-600);
+  color: var(--muted);
+}
+
+.blk.draft {
+  z-index: 8;
+  top: 2px;
+  bottom: 2px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 2px solid var(--text);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.draft-tip {
+  position: absolute;
+  top: -30px;
+  left: 0;
+  background: var(--text);
+  color: var(--navy-900);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.tl-sub .tl-label {
+  background: var(--navy-700);
+  min-height: 40px;
+}
+
+.tl-lane.sub {
+  height: 40px;
+  background-color: var(--navy-700);
+  background-image: none;
+}
+
+.tl-lane.cov-lane {
+  height: 38px;
+}
+
+.cov-blk {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.85rem;
+  background: rgba(70, 230, 60, 0.12);
+  color: var(--green);
+}
+
+.cov-blk.none {
+  background: transparent;
+}
+
+.cov-blk.short,
+.cov-blk.over {
+  background: rgba(255, 194, 71, 0.22);
+  color: var(--warn);
+}
+
+.cov-blk.open {
+  background: rgba(255, 92, 108, 0.26);
+  color: var(--danger);
+}
+
+.now-line,
+.hover-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+  z-index: 7;
+}
+
+.now-line {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(70, 230, 60, 0.7);
+}
+
+.hover-line {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.lead-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.who-line .bump {
+  opacity: 0.55;
+}
+
+.tl-row:hover .who-line .bump,
+.who-line .bump:focus-visible {
+  opacity: 1;
+}
+
+.screen-only {
+  display: block;
+}
+
+.print-log {
+  display: none;
+}
+
 /* ---------- small screens ---------- */
 @media (max-width: 860px) {
   .now-grid {
@@ -1193,7 +1467,8 @@ table.grid.tight {
 /* ---------- print: the break log, like the paper one ---------- */
 @media print {
   @page {
-    margin: 0.5in;
+    size: landscape;
+    margin: 0.4in;
   }
   html,
   body {
@@ -1204,76 +1479,79 @@ table.grid.tight {
   .topbar,
   .tabs,
   .no-print,
-  .toast {
+  .screen-only,
+  .toast,
+  .print-title,
+  .shell > p,
+  datalist {
     display: none !important;
-  }
-  .print-only {
-    display: block;
   }
   .shell {
     max-width: none;
     padding: 0;
   }
-  .card,
-  .scroll {
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
+  .print-log {
+    display: block;
+    color: #000;
   }
-  .print-title {
+  .print-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .print-title2 {
     font-family: var(--font-display);
     text-align: center;
-    font-size: 20px;
-    margin: 8px 0 12px;
-    color: #000;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    margin: 4px 0 10px;
   }
-  .log-head .field {
-    border: none !important;
-    border-bottom: 1px solid #000 !important;
-    border-radius: 0 !important;
-    background: none !important;
+  table.plog {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
   }
-  .log-head label {
-    color: #000;
-  }
-  table.log {
-    min-width: 0;
-    border: 1px solid #000;
-  }
-  .log th {
+  .plog th {
     background: #dde7fb !important;
-    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     border: 1px solid #000;
+    padding: 5px 4px;
+    font-size: 10px;
+    text-align: center;
   }
-  .log td {
+  .plog td {
     border: 1px solid #000;
-    color: #000;
+    padding: 0 5px;
+    height: 30px;
+    font-size: 11px;
+    text-align: center;
+    overflow: hidden;
   }
-  .log tr.done td,
-  .log tr.active td {
-    opacity: 1;
-    background: none;
+  .plog td:first-child {
+    text-align: left;
+    font-weight: 700;
   }
-  .log .field {
-    border: none !important;
-    background: none !important;
-    color: #000 !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    appearance: none;
-    -webkit-appearance: none;
+  .plog td:last-child {
+    text-align: left;
+    font-size: 10px;
   }
-  .log input[type="time"]::-webkit-calendar-picker-indicator {
-    display: none;
+  .plog td.plan {
+    color: #888;
+    font-style: italic;
   }
-  .log small {
-    display: none;
+  .plog-role {
+    font-weight: 400;
+    font-size: 9px;
   }
-  .rules th,
-  .rules td {
-    border-color: #000;
+  .plog-note {
+    font-size: 9px;
+    color: #555;
+    margin: 6px 0 0;
   }
-  .rules th {
-    background: #dde7fb;
+  .plog tr {
+    break-inside: avoid;
   }
 }

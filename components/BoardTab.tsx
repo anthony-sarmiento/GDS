@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
-import { Position, POSITIONS, POSITION_LABEL, Shift } from "@/lib/types";
+import { runBreakChange } from "./breakFlow";
+import { LEAD_LABEL, Position, POSITIONS, POSITION_LABEL, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
+import { applyBreakChange } from "@/lib/cover";
 import {
-  breakAtCell,
   breakImpact,
-  cellAt,
-  cellKey,
+  breakSpan,
   cellsFor,
+  coverageRuns,
   isPresent,
   liveFloor,
   positionMinutes,
-  staffAt,
+  positionRuns,
+  rotating,
   staffStatus,
   suggestCover,
 } from "@/lib/rotation";
@@ -30,24 +32,30 @@ const BRUSHES: { id: Brush; label: string; key: string; cls: string }[] = [
   { id: "erase", label: "Erase", key: "0", cls: "brush-erase" },
 ];
 
-export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
-  const { day, settings, now, mutate } = ctx;
-  const [bumpFor, setBumpFor] = useState<string | null>(null);
+const ZOOMS = [2, 3, 4, 6]; // pixels per minute
+const LABEL_W = 200;
 
-  if (!day.shifts.length) {
+export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
+  const { day, now, mutate } = ctx;
+  const [bumpFor, setBumpFor] = useState<string | null>(null);
+  const crew = rotating(day.shifts);
+  const leads = day.shifts.filter((s) => s.role);
+
+  if (!crew.length) {
     return (
       <div className="card empty">
         <h2>Nobody on the board yet</h2>
-        <p>Add today&rsquo;s team and GDS will build the rotation and break plan.</p>
+        <p>
+          {leads.length
+            ? "Only leads are on today. Leads are not on the rotation, so add the retail team."
+            : "Add today's team and GDS will build the rotation and break plan."}
+        </p>
         <button className="btn primary" onClick={goTeam}>
           Add team
         </button>
       </div>
     );
   }
-
-  const cells = cellsFor(day.shifts, settings);
-  const currentCell = now == null ? null : cellAt(cells, settings.gridMinutes, now);
 
   return (
     <div>
@@ -56,7 +64,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       <div className="section-title">
         <h2>Board</h2>
-        <p>Pick a position, then click or drag across a row. Painted blocks stay put until you erase them.</p>
+        <p>Pick a brush, then drag across a row for an exact time range, or click a block to repaint all of it.</p>
         <span className="spacer" />
         <button
           className="btn"
@@ -65,7 +73,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
             mutate(
               (d) => ({
                 ...d,
-                // keep hand-painted blocks; drop everything else from now on so it is dealt again
+                // keep hand-painted blocks and cover blocks; drop the rest from now on so it is dealt again
                 cells: Object.fromEntries(
                   Object.entries(d.cells).filter(([k, c]) => c.pinned || Number(k.split("@")[1]) < from),
                 ),
@@ -81,7 +89,14 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
           className="btn ghost"
           onClick={() => {
             mutate(
-              (d) => ({ ...d, cells: Object.fromEntries(Object.entries(d.cells).map(([k, c]) => [k, { ...c, pinned: false }])) }),
+              (d) => ({
+                ...d,
+                cells: Object.fromEntries(
+                  Object.entries(d.cells)
+                    .filter(([, c]) => !c.cover)
+                    .map(([k, c]) => [k, { ...c, pinned: false }]),
+                ),
+              }),
               { auto: "cells" },
             );
             ctx.flash("Cleared all hand-painted blocks and re-dealt");
@@ -91,16 +106,17 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         </button>
       </div>
 
-      <Grid ctx={ctx} cells={cells} currentCell={currentCell} onBump={setBumpFor} />
+      {leads.length > 0 && (
+        <div className="lead-strip">
+          {leads.map((s) => (
+            <span key={s.id} className="badge">
+              {s.role ? LEAD_LABEL[s.role] : "Lead"} · {s.name || "?"} · {fmtShort(s.start)}–{fmtShort(s.end)}
+            </span>
+          ))}
+        </div>
+      )}
 
-      <div className="section-title">
-        <h2>Coverage</h2>
-        <p>
-          People on each position per column, breaks excluded. SOP: Front {settings.limits.front.min}–{settings.limits.front.max}, Bar{" "}
-          {settings.limits.bar.min}–{settings.limits.bar.max}, Dungeon {settings.limits.dungeon.min}–{settings.limits.dungeon.max}.
-        </p>
-      </div>
-      <Coverage ctx={ctx} cells={cells} currentCell={currentCell} />
+      <Timeline ctx={ctx} onBump={setBumpFor} />
 
       <div className="section-title">
         <h2>Time at each position</h2>
@@ -119,10 +135,10 @@ function NowPanel({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
   const { day, settings, now } = ctx;
   const t = now!;
   const floor = liveFloor(day, settings, t);
-  const onShift = day.shifts.filter((s) => s.start <= t && t < s.end);
+  const onShift = rotating(day.shifts).filter((s) => s.start <= t && t < s.end);
   const nextBlock =
     settings.anchor + (Math.floor((t - settings.anchor) / settings.rotationMinutes) + 1) * settings.rotationMinutes;
-  const lastEnd = Math.max(...day.shifts.map((s) => s.end));
+  const lastEnd = Math.max(...rotating(day.shifts).map((s) => s.end));
 
   return (
     <div className="section">
@@ -177,7 +193,11 @@ function NowPanel({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
                     <small>from {POSITION_LABEL[cover.from]}</small>
                   </div>
                 )}
-                {status === "over" && <div className="open-label" style={{ marginTop: 10, color: "var(--warn)" }}>Over the max</div>}
+                {status === "over" && (
+                  <div className="open-label" style={{ marginTop: 10, color: "var(--warn)" }}>
+                    Over the max
+                  </div>
+                )}
               </div>
             );
           })}
@@ -206,7 +226,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
     <div className="section">
       <div className="section-title">
         <h2>Break timer</h2>
-        <p>On break now first, then next up. Tap Start when someone leaves, End when they are back.</p>
+        <p>On break now first, then next up. Start moves a cover onto the position. End when they are back.</p>
       </div>
       {!items.length && <div className="card muted">No breaks coming up.</div>}
       <div className="queue">
@@ -221,6 +241,11 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
               <div className="q-main">
                 <strong>
                   {s.name} <span className="muted">· {b.length} min</span>
+                  {s.role && (
+                    <span className="badge" style={{ marginLeft: 6 }}>
+                      {LEAD_LABEL[s.role]}
+                    </span>
+                  )}
                 </strong>
                 <small>
                   {status === "active"
@@ -240,11 +265,21 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
                 )}
               </div>
               {status === "active" ? (
-                <button className="btn primary small" onClick={() => mutate((d) => endBreak(d, s.id, b.id, t), { auto: "cells" })}>
+                <button
+                  className="btn primary small"
+                  onClick={() =>
+                    mutate((d) => applyBreakChange(d, settings, (dd) => ({ day: endBreak(dd, s.id, b.id, t), breakId: b.id })), {
+                      auto: "fill",
+                    })
+                  }
+                >
                   End
                 </button>
               ) : (
-                <button className="btn small" onClick={() => mutate((d) => startBreak(d, s.id, b.id, t), { auto: "cells" })}>
+                <button
+                  className="btn small"
+                  onClick={() => runBreakChange(ctx, (d) => ({ day: startBreak(d, s.id, b.id, t), breakId: b.id }))}
+                >
                   Start
                 </button>
               )}
@@ -256,67 +291,43 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
   );
 }
 
-/* ---------- shared header ---------- */
+/* ---------- the timeline ---------- */
 
-function TimeHeader({ cells, currentCell, first }: { cells: number[]; currentCell: number | null; first: string }) {
-  const hours: { hour: number; count: number }[] = [];
-  for (const c of cells) {
-    const hour = Math.floor(c / 60);
-    const last = hours[hours.length - 1];
-    if (last && last.hour === hour) last.count += 1;
-    else hours.push({ hour, count: 1 });
-  }
-  return (
-    <thead>
-      <tr>
-        <th className="who" rowSpan={2}>
-          {first}
-        </th>
-        {hours.map((h) => (
-          <th key={h.hour} colSpan={h.count} className="hour">
-            {fmt(h.hour * 60).replace(":00", "")}
-          </th>
-        ))}
-      </tr>
-      <tr>
-        {cells.map((c) => (
-          <th key={c} className={`minute ${c === currentCell ? "current" : ""}`}>
-            {String(((c % 60) + 60) % 60).padStart(2, "0")}
-          </th>
-        ))}
-      </tr>
-    </thead>
-  );
+interface Drag {
+  shiftId: string;
+  lane: HTMLElement;
+  t0: number;
+  t1: number;
 }
 
-/* ---------- the painted grid ---------- */
-
-type Draft = { shiftId: string; cells: number[] } | null;
-
-function Grid({
-  ctx,
-  cells,
-  currentCell,
-  onBump,
-}: {
-  ctx: Ctx;
-  cells: number[];
-  currentCell: number | null;
-  onBump: (id: string) => void;
-}) {
-  const { day, settings, mutate, flash } = ctx;
+function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
+  const { day, settings, now, flash } = ctx;
   const g = settings.gridMinutes;
-  const [brush, setBrush] = useState<Brush>("none");
-  const [draft, setDraft] = useState<Draft>(null);
-  const drag = useRef<{ shiftId: string; first: number; touch: boolean } | null>(null);
-  const live = useRef({ ctx, brush, cells });
-  live.current = { ctx, brush, cells };
+  const crew = rotating(day.shifts);
 
-  // keyboard: 1-4 pick a brush, 0 erase, Esc to put the brush down
+  const [brush, setBrush] = useState<Brush>("none");
+  const [ppm, setPpm] = useState(3);
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const [hover, setHover] = useState<number | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  const live = useRef({ ctx, brush });
+  live.current = { ctx, brush };
+
+  const dayStart = Math.floor(Math.min(...crew.map((s) => s.start)) / 60) * 60;
+  const dayEnd = Math.ceil(Math.max(...crew.map((s) => s.end)) / 60) * 60;
+  const width = (dayEnd - dayStart) * ppm;
+  const X = (t: number) => (t - dayStart) * ppm;
+  const range = useRef({ dayStart, dayEnd, ppm });
+  range.current = { dayStart, dayEnd, ppm };
+
+  const hours: number[] = [];
+  for (let h = dayStart; h < dayEnd; h += 60) hours.push(h);
+
+  // keys: 1-4 pick a brush, 0 erases, Esc puts the brush down
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
+      if (el && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") setBrush("none");
       const hit = BRUSHES.find((b) => b.key === e.key);
@@ -326,52 +337,66 @@ function Grid({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // finish a paint stroke anywhere on the page
+  // painting: the stroke is tracked on the window so it never gets lost
   useEffect(() => {
-    const range = (shiftId: string, a: number, b: number) => {
-      const { cells: cs, ctx: c } = live.current;
-      const s = c.day.shifts.find((x) => x.id === shiftId);
-      if (!s) return [];
-      const lo = Math.min(a, b);
-      const hi = Math.max(a, b);
-      return cs.filter((x) => x >= lo && x <= hi && isPresent(s, x, c.settings.gridMinutes));
+    const minuteAt = (e: { clientX: number }, lane: HTMLElement) => {
+      const { dayStart: ds, dayEnd: de, ppm: p } = range.current;
+      const x = e.clientX - lane.getBoundingClientRect().left;
+      const t = ds + Math.floor(x / p / g) * g;
+      return Math.max(ds, Math.min(de - g, t));
     };
 
     const onMove = (e: PointerEvent) => {
-      const d = drag.current;
-      if (!d || d.touch) return;
-      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-cell]");
-      if (!el) return;
-      const [sid, cs] = (el.dataset.cell ?? "").split("|");
-      if (sid !== d.shiftId) return;
-      setDraft({ shiftId: sid, cells: range(sid, d.first, Number(cs)) });
+      const d = dragRef.current;
+      if (!d) return;
+      const t1 = minuteAt(e, d.lane);
+      if (t1 !== d.t1) {
+        dragRef.current = { ...d, t1 };
+        setDrag(dragRef.current);
+      }
     };
 
     const onUp = () => {
-      const d = drag.current;
-      drag.current = null;
-      setDraft((cur) => {
-        if (d && cur && cur.cells.length) apply(d.shiftId, cur.cells);
-        return null;
-      });
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (d) apply(d);
     };
     const onCancel = () => {
-      drag.current = null;
-      setDraft(null);
+      dragRef.current = null;
+      setDrag(null);
     };
 
-    function apply(shiftId: string, picked: number[]) {
+    function apply(d: Drag) {
       const { ctx: c, brush: b } = live.current;
+      const day2 = c.day;
+      const shift = day2.shifts.find((s) => s.id === d.shiftId);
+      if (!shift || b === "none") return;
       const gm = c.settings.gridMinutes;
-      const sorted = [...picked].sort((x, y) => x - y);
-      if (b === "none") return;
-      if (b === "erase") {
-        c.mutate((d) => eraseCells(d, c.settings, shiftId, sorted), { auto: "cells" });
-      } else if (b === "break") {
-        const span = sorted.length > 1 ? sorted[sorted.length - 1] + gm - sorted[0] : null;
-        c.mutate((d) => placeBreak(d, c.settings, shiftId, sorted[0], span), { auto: "cells" });
+      const moved = d.t0 !== d.t1;
+      const lo = Math.min(d.t0, d.t1);
+      const hi = Math.max(d.t0, d.t1) + gm;
+      const crewCells = cellsFor(day2.shifts, c.settings);
+      const cellsIn = (a: number, z: number) => crewCells.filter((x) => x + gm > a && x < z && isPresent(shift, x, gm));
+
+      // the merged block under the click, so a plain click repaints the whole block
+      const { runs } = positionRuns(day2, c.settings, shift);
+      const run = runs.find((r) => r.start <= d.t0 && d.t0 < r.end);
+
+      if (b === "break") {
+        const length = moved ? hi - lo : null;
+        runBreakChange(c, (dd) => placeBreak(dd, shift.id, moved ? lo : d.t0, length));
+      } else if (b === "erase") {
+        const hit = shift.breaks.find((br) => {
+          const sp = breakSpan(br);
+          return br.start == null && sp && sp[0] <= d.t0 && d.t0 < sp[1];
+        });
+        const sp = hit ? breakSpan(hit) : null;
+        const targets = moved ? cellsIn(lo, hi) : sp ? cellsIn(sp[0], sp[1]) : run ? cellsIn(run.start, run.end) : [];
+        if (targets.length) c.mutate((dd) => eraseCells(dd, c.settings, shift.id, targets), { auto: "fill" });
       } else {
-        c.mutate((d) => paintCells(d, shiftId, sorted, b), { auto: "fill" });
+        const targets = moved ? cellsIn(lo, hi) : run ? cellsIn(run.start, run.end) : [];
+        if (targets.length) c.mutate((dd) => paintCells(dd, shift.id, targets, b), { auto: "fill" });
       }
     }
 
@@ -383,17 +408,35 @@ function Grid({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
     };
-  }, []);
+  }, [g]);
 
-  function down(e: React.PointerEvent, shiftId: string, c: number) {
+  function down(e: React.PointerEvent<HTMLDivElement>, shift: Shift) {
     if (brush === "none") return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (e.pointerType !== "touch") e.preventDefault();
-    drag.current = { shiftId, first: c, touch: e.pointerType === "touch" };
-    setDraft({ shiftId, cells: [c] });
+    e.preventDefault();
+    const lane = e.currentTarget;
+    const x = e.clientX - lane.getBoundingClientRect().left;
+    const t = Math.max(dayStart, Math.min(dayEnd - g, dayStart + Math.floor(x / ppm / g) * g));
+    const d = { shiftId: shift.id, lane, t0: t, t1: t };
+    dragRef.current = d;
+    setDrag(d);
+  }
+
+  function track(e: React.PointerEvent<HTMLDivElement>) {
+    const x = e.clientX - e.currentTarget.getBoundingClientRect().left - LABEL_W;
+    const t = dayStart + Math.floor(x / ppm / g) * g;
+    const next = t >= dayStart && t < dayEnd ? t : null;
+    if (next !== hover) setHover(next);
   }
 
   const brushDef = BRUSHES.find((b) => b.id === brush);
+  const dragLo = drag ? Math.min(drag.t0, drag.t1) : 0;
+  const dragHi = drag ? Math.max(drag.t0, drag.t1) + g : 0;
+
+  const coverage = useMemo(
+    () => POSITIONS.map((p) => ({ p, runs: coverageRuns(day, settings, p) })),
+    [day, settings],
+  );
 
   return (
     <div>
@@ -411,97 +454,188 @@ function Grid({
             {b.label}
           </button>
         ))}
-        <span className="muted palette-hint">
-          {brush === "none" && "Pick a brush to start. Esc puts it down."}
-          {brush === "break" && "Click a column to put a break there. Drag across columns to set its length."}
-          {brush === "erase" && "Click or drag to clear painted blocks and take breaks off the board."}
-          {(brush === "front" || brush === "bar" || brush === "dungeon") && `Click or drag across a row to put people on ${POSITION_LABEL[brush]}.`}
-        </span>
+        <span style={{ flex: 1 }} />
+        <span className="muted">Zoom</span>
+        <button
+          className="btn small"
+          disabled={ppm === ZOOMS[0]}
+          onClick={() => setPpm(ZOOMS[Math.max(0, ZOOMS.indexOf(ppm) - 1)])}
+          aria-label="Zoom out"
+        >
+          −
+        </button>
+        <button
+          className="btn small"
+          disabled={ppm === ZOOMS[ZOOMS.length - 1]}
+          onClick={() => setPpm(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(ppm) + 1)])}
+          aria-label="Zoom in"
+        >
+          +
+        </button>
       </div>
+      <p className="muted palette-hint" style={{ margin: "0 0 10px" }}>
+        {brush === "none" && "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down)."}
+        {brush === "break" &&
+          "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
+        {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
+        {(brush === "front" || brush === "bar" || brush === "dungeon") &&
+          `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
+      </p>
 
       <div className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
-        <table className="grid tight">
-          <TimeHeader cells={cells} currentCell={currentCell} first="Team" />
-          <tbody>
-            {day.shifts.map((s) => {
-              const states = cells.map((c) => {
-                if (!isPresent(s, c, g)) return { kind: "absent" as const };
-                const brk = breakAtCell(s, c, g);
-                if (brk) return { kind: "break" as const, brk };
-                const cell = day.cells[cellKey(s.id, c)];
-                return cell ? { kind: "pos" as const, pos: cell.pos, pinned: cell.pinned } : { kind: "none" as const };
-              });
-              const same = (i: number, j: number) => {
-                const a = states[i];
-                const b = states[j];
-                if (!a || !b || a.kind !== b.kind) return false;
-                if (a.kind === "pos" && b.kind === "pos") return a.pos === b.pos && a.pinned === b.pinned;
-                if (a.kind === "break" && b.kind === "break") return a.brk.id === b.brk.id;
-                return a.kind === "none";
-              };
-              const canBump = s.end > (ctx.now ?? s.start);
-              return (
-                <tr key={s.id}>
-                  <th className="who" scope="row">
-                    <div className="who-line">
-                      <span>{s.name || "(no name)"}</span>
-                      {canBump && (
-                        <button className="btn ghost small bump" onClick={() => onBump(s.id)} title="Send home / hand off to the next shift">
-                          Bump out
-                        </button>
-                      )}
+        <div
+          className="tl"
+          style={{ width: LABEL_W + width, ["--ppm" as string]: ppm }}
+          onPointerMove={track}
+          onPointerLeave={() => setHover(null)}
+        >
+          {/* time ruler */}
+          <div className="tl-row tl-head">
+            <div className="tl-label">
+              <span className="muted">{hover != null ? fmt(hover) : "Team"}</span>
+            </div>
+            <div className="tl-lane ruler" style={{ width }}>
+              {hours.map((h) => (
+                <div key={h} className="tick hour" style={{ left: X(h) }}>
+                  {fmt(h).replace(":00", "")}
+                </div>
+              ))}
+              {ppm >= 3 &&
+                hours.flatMap((h) =>
+                  [15, 30, 45].map((m) => (
+                    <div key={h + m} className="tick quarter" style={{ left: X(h + m) }}>
+                      :{m}
                     </div>
-                    <small>
-                      {fmtShort(s.start)}–{fmtShort(s.end)}
-                      {s.floater ? " · floater" : ""}
-                      {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
-                      {s.sentHomeAt != null ? ` · sent home${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
-                    </small>
-                  </th>
-                  {cells.map((c, i) => {
-                    const st = states[i];
-                    const inDraft = draft?.shiftId === s.id && draft.cells.includes(c);
-                    const start = !same(i - 1, i);
-                    const end = !same(i, i + 1);
-                    const edge = `${start ? "run-start" : ""} ${end ? "run-end" : ""}`;
-                    let inner: React.ReactNode = <div className="cell-empty" />;
-                    if (st.kind === "pos") {
-                      inner = (
-                        <div className={`tile pos-${st.pos} ${edge} ${st.pinned ? "pinned" : ""}`}>
-                          {start && <span className="tile-label">{POSITION_LABEL[st.pos]}</span>}
-                          {start && st.pinned && <i className="pin" aria-hidden />}
-                        </div>
-                      );
-                    } else if (st.kind === "break") {
-                      const bs = breakStatus(st.brk);
-                      inner = (
-                        <div className={`tile tile-break ${bs} ${edge}`} title={`${s.name}: ${st.brk.length} min break`}>
-                          {start && (
-                            <span className="tile-label">
-                              {bs === "active" ? "ON BREAK" : bs === "done" ? "✓ Break" : `☕ ${fmtShort(effectiveStart(st.brk))}`}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    } else if (st.kind === "none") {
-                      inner = <div className="tile tile-none" />;
-                    }
-                    return (
-                      <td
-                        key={c}
-                        data-cell={st.kind === "absent" ? undefined : `${s.id}|${c}`}
-                        className={`${c === currentCell ? "current" : ""} ${inDraft ? "draft" : ""} ${((c % 60) + 60) % 60 === 0 ? "hour-edge" : ""}`}
-                        onPointerDown={st.kind === "absent" ? undefined : (e) => down(e, s.id, c)}
+                  )),
+                )}
+            </div>
+          </div>
+
+          {crew.map((s) => {
+            const { runs, pins } = positionRuns(day, settings, s);
+            const inDrag = drag?.shiftId === s.id;
+            return (
+              <div className="tl-row" key={s.id}>
+                <div className="tl-label">
+                  <div className="who-line">
+                    <span className="who-name">{s.name || "(no name)"}</span>
+                    {s.end > (now ?? s.start) && (
+                      <button
+                        className="btn ghost small bump"
+                        onClick={() => onBump(s.id)}
+                        title="Send home / hand off to the next shift"
                       >
-                        {inner}
-                      </td>
+                        Bump out
+                      </button>
+                    )}
+                  </div>
+                  <small>
+                    {fmtShort(s.start)}–{fmtShort(s.end)}
+                    {s.floater ? " · floater" : ""}
+                    {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
+                    {s.sentHomeAt != null ? ` · sent home${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
+                  </small>
+                </div>
+                <div className="tl-lane" style={{ width }} onPointerDown={(e) => down(e, s)}>
+                  <div className="off" style={{ left: 0, width: Math.max(0, X(s.start)) }} />
+                  <div className="off" style={{ left: X(s.end), width: Math.max(0, width - X(s.end)) }} />
+
+                  {runs.map((r) => (
+                    <div
+                      key={`${r.pos}-${r.start}`}
+                      className={`blk pos-${r.pos}`}
+                      style={{ left: X(r.start), width: (r.end - r.start) * ppm }}
+                      title={`${s.name}: ${POSITION_LABEL[r.pos]} ${fmt(r.start)}–${fmt(r.end)}`}
+                    >
+                      <span className="blk-label">
+                        {(r.end - r.start) * ppm > 46 ? POSITION_LABEL[r.pos] : POSITION_LABEL[r.pos][0]}
+                      </span>
+                    </div>
+                  ))}
+                  {pins.map(([a, z]) => (
+                    <div key={`pin-${a}`} className="pin-strip" style={{ left: X(a), width: (z - a) * ppm }} />
+                  ))}
+
+                  {s.breaks.map((b) => {
+                    const sp = breakSpan(b);
+                    if (!sp) return null;
+                    const st = breakStatus(b);
+                    const w = (sp[1] - sp[0]) * ppm;
+                    return (
+                      <div
+                        key={b.id}
+                        className={`blk brk ${st}`}
+                        style={{ left: X(sp[0]), width: w }}
+                        title={`${s.name}: ${b.length} min break ${fmt(sp[0])}–${fmt(sp[1])}`}
+                      >
+                        <span className="blk-label">
+                          {st === "active"
+                            ? "ON BREAK"
+                            : st === "done"
+                              ? "✓"
+                              : w > 96
+                                ? `☕ ${fmtShort(sp[0])}–${fmtShort(sp[1])}`
+                                : w > 40
+                                  ? `☕ ${fmtShort(sp[0])}`
+                                  : "☕"}
+                        </span>
+                      </div>
                     );
                   })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+
+                  {inDrag && (
+                    <div className={`blk draft ${brushDef?.cls ?? ""}`} style={{ left: X(dragLo), width: (dragHi - dragLo) * ppm }}>
+                      <span className="draft-tip">
+                        {fmt(dragLo)}–{fmt(dragHi)} · {dragHi - dragLo}m
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* coverage lives in the same scroll area so it lines up with the rows above */}
+          <div className="tl-row tl-sub">
+            <div className="tl-label">
+              <strong>Coverage</strong>
+              <small>People on each position</small>
+            </div>
+            <div className="tl-lane sub" style={{ width }} />
+          </div>
+          {coverage.map(({ p, runs }) => (
+            <div className={`tl-row pos-${p}`} key={p}>
+              <div className="tl-label">
+                <span className="who-name" style={{ color: "var(--pos)" }}>
+                  {POSITION_LABEL[p]}
+                </span>
+                <small>
+                  {settings.limits[p].min === settings.limits[p].max
+                    ? `exactly ${settings.limits[p].min}`
+                    : `${settings.limits[p].min}–${settings.limits[p].max}`}
+                </small>
+              </div>
+              <div className="tl-lane cov-lane" style={{ width }}>
+                {runs.map((r) => (
+                  <div
+                    key={r.start}
+                    className={`cov-blk ${r.status}`}
+                    style={{ left: X(r.start), width: (r.end - r.start) * ppm }}
+                    title={`${POSITION_LABEL[p]}: ${r.count} from ${fmt(r.start)} to ${fmt(r.end)}`}
+                  >
+                    {r.status === "none" ? "" : r.count}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* now + hover lines */}
+          {now != null && now >= dayStart && now <= dayEnd && (
+            <div className="now-line" style={{ left: LABEL_W + X(now) }} />
+          )}
+          {hover != null && !drag && <div className="hover-line" style={{ left: LABEL_W + X(hover) }} />}
+        </div>
       </div>
 
       <div className="legend" style={{ marginTop: 10 }}>
@@ -515,8 +649,14 @@ function Grid({
           <i style={{ background: "var(--break)" }} />
           Break (green = on break now)
         </span>
-        <span>● painted by hand</span>
-        <button className="btn ghost small" onClick={() => flash("Tip: keys 1–4 pick a brush, 0 erases, Esc puts it down")}>
+        <span>
+          <i style={{ background: "var(--text)", height: 3, marginTop: 4 }} />
+          Painted by hand
+        </span>
+        <button
+          className="btn ghost small"
+          onClick={() => flash("Keys: 1 Front · 2 Bar · 3 Dungeon · 4 Break · 0 Erase · Esc put the brush down")}
+        >
           Shortcuts
         </button>
       </div>
@@ -524,55 +664,14 @@ function Grid({
   );
 }
 
-/* ---------- coverage ---------- */
-
-function Coverage({ ctx, cells, currentCell }: { ctx: Ctx; cells: number[]; currentCell: number | null }) {
-  const { day, settings } = ctx;
-  const g = settings.gridMinutes;
-  return (
-    <div className="scroll board">
-      <table className="grid tight">
-        <TimeHeader cells={cells} currentCell={currentCell} first="Position" />
-        <tbody>
-          {POSITIONS.map((p) => (
-            <tr key={p} className={`pos-${p}`}>
-              <th className="who" scope="row" style={{ color: "var(--pos)" }}>
-                {POSITION_LABEL[p]}
-                <small>
-                  {settings.limits[p].min === settings.limits[p].max
-                    ? `exactly ${settings.limits[p].min}`
-                    : `${settings.limits[p].min}–${settings.limits[p].max}`}
-                </small>
-              </th>
-              {cells.map((c) => {
-                const anyone = day.shifts.some((s) => isPresent(s, c, g));
-                const names = staffAt(day, settings, c)[p];
-                const st = staffStatus(names.length, settings.limits[p]);
-                return (
-                  <td
-                    key={c}
-                    className={`cov ${!anyone ? "none" : st} ${c === currentCell ? "current" : ""}`}
-                    title={names.map((s) => s.name).join(", ") || "Nobody"}
-                  >
-                    {anyone ? names.length : "·"}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function Fairness({ ctx }: { ctx: Ctx }) {
   const { day, settings } = ctx;
+  const crew = rotating(day.shifts);
   const mins = positionMinutes(day, settings);
-  const longest = Math.max(1, ...day.shifts.map((s) => POSITIONS.reduce((n, p) => n + mins[s.id][p], 0)));
+  const longest = Math.max(1, ...crew.map((s) => POSITIONS.reduce((n, p) => n + mins[s.id][p], 0)));
   return (
     <div className="card fair">
-      {day.shifts.map((s) => {
+      {crew.map((s) => {
         const m = mins[s.id];
         return (
           <div key={s.id} style={{ display: "contents" }}>
@@ -584,10 +683,18 @@ function Fairness({ ctx }: { ctx: Ctx }) {
                 </span>
               )}
             </div>
-            <div className="bar-track" style={{ width: `${(POSITIONS.reduce((n, p) => n + m[p], 0) / longest) * 100}%`, minWidth: 40 }}>
+            <div
+              className="bar-track"
+              style={{ width: `${(POSITIONS.reduce((n, p) => n + m[p], 0) / longest) * 100}%`, minWidth: 40 }}
+            >
               {POSITIONS.map((p) =>
                 m[p] > 0 ? (
-                  <div key={p} className={`bar-seg pos-${p}`} style={{ flex: m[p] }} title={`${POSITION_LABEL[p]} ${fmtDuration(m[p])}`}>
+                  <div
+                    key={p}
+                    className={`bar-seg pos-${p}`}
+                    style={{ flex: m[p] }}
+                    title={`${POSITION_LABEL[p]} ${fmtDuration(m[p])}`}
+                  >
                     {fmtDuration(m[p])}
                   </div>
                 ) : null,
@@ -604,25 +711,26 @@ function Fairness({ ctx }: { ctx: Ctx }) {
 
 function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose: () => void }) {
   const { day, settings, now, mutate, flash } = ctx;
-  const out = day.shifts.find((s) => s.id === outId);
+  const crew = rotating(day.shifts);
+  const out = crew.find((s) => s.id === outId);
   const [leaver, setLeaver] = useState(outId);
-  const leaving = day.shifts.find((s) => s.id === leaver) ?? out;
+  const leaving = crew.find((s) => s.id === leaver) ?? out;
 
   // The person who relieves them is whoever clocks in around the time they would leave.
-  const relief = day.shifts
+  const relief = crew
     .filter((s) => s.id !== outId && s.sentHomeAt == null && out != null && s.start >= out.end - 60 && s.end > out.end)
     .sort((a, b) => a.start - b.start)[0];
   // default time: now if we have it, otherwise when the relief arrives, otherwise their clock-out
   const [time, setTime] = useState<number>(() => {
     const t = now != null ? Math.max(now, relief?.start ?? now) : (relief?.start ?? out?.end ?? 0);
-    return Math.round(t / 15) * 15;
+    return Math.round(t / 5) * 5;
   });
   const [incoming, setIncoming] = useState<string>(relief?.id ?? "");
-  const candidates = day.shifts.filter((s) => s.id !== leaver && s.end > time && s.sentHomeAt == null);
+  const candidates = crew.filter((s) => s.id !== leaver && s.end > time && s.sentHomeAt == null);
 
   function pickIncoming(id: string) {
     setIncoming(id);
-    const inc = day.shifts.find((s) => s.id === id);
+    const inc = crew.find((s) => s.id === id);
     if (inc && inc.start > time) setTime(inc.start);
   }
 
@@ -630,7 +738,7 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
 
   function confirm() {
     if (!leaving) return;
-    const inc = day.shifts.find((s) => s.id === incoming);
+    const inc = crew.find((s) => s.id === incoming);
     mutate((d) => bumpOut(d, settings, leaving.id, incoming || null, time), { auto: true });
     flash(`${leaving.name} out at ${fmt(time)}${inc ? ` · ${inc.name} takes over` : ""}`);
     onClose();
@@ -647,7 +755,7 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
           <label className="lbl">
             Sending home
             <select className="field" value={leaver} onChange={(e) => setLeaver(e.target.value)}>
-              {day.shifts
+              {crew
                 .filter((s) => s.sentHomeAt == null)
                 .map((s) => (
                   <option key={s.id} value={s.id}>
