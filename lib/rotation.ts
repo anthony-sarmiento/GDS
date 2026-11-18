@@ -138,8 +138,8 @@ function assign(
  * - Pinned cells (painted by hand) never move.
  * - Columns that start before `recomputeFrom` keep what they have (only gaps are filled),
  *   so changing things mid-shift does not rewrite the past. Pass Infinity to only fill gaps.
- * - People on break are off the floor for those columns; others are moved to cover when a
- *   position would drop below its minimum.
+ * - People on break keep their position in the deal. Nobody is moved over to cover a break on
+ *   their own: the lead picks the cover (see cover.ts), and Coverage shows the gap until then.
  */
 export function autoFill(
   day: DayState,
@@ -173,10 +173,14 @@ export function autoFill(
       const onBreak = !!breakAtCell(s, c, g);
       if (existing && (existing.pinned || !recompute)) {
         decided.set(s.id, existing);
-        // a custom block ("Tournament") keeps someone busy but is not one of the three positions
-        if (!onBreak && existing.pos !== "other") fixedCounts[existing.pos] += 1;
+        // A custom block ("Tournament") keeps someone busy but is not one of the three positions.
+        // Someone on break still holds their position here: who covers is the lead's call, so the
+        // board never moves people over by itself.
+        if (existing.pos !== "other") fixedCounts[existing.pos] += 1;
       } else if (onBreak) {
-        decided.set(s.id, { pos: prev.get(s.id) ?? s.lock ?? "front", pinned: false });
+        const held = prev.get(s.id) ?? s.lock ?? "front";
+        decided.set(s.id, { pos: held, pinned: false });
+        fixedCounts[held] += 1;
       } else if (s.lock) {
         decided.set(s.id, { pos: s.lock, pinned: false });
         fixedCounts[s.lock] += 1;
