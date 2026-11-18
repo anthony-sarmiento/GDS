@@ -292,6 +292,10 @@ export function placeBreak(
     open.find((b) => b.planned == null) ??
     [...open].sort((a, b) => Math.abs((a.planned ?? 0) - startMinute) - Math.abs((b.planned ?? 0) - startMinute))[0];
 
+  // a break always sits inside the person's shift, even if you drop it right at the edge
+  const len = length ?? target?.length ?? 20;
+  startMinute = Math.max(shift.start, Math.min(startMinute, shift.end - len));
+
   if (!target) {
     const brk = { ...newBreak(length ?? 20), planned: startMinute, locked: true };
     return {

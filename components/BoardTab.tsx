@@ -336,6 +336,9 @@ interface Drag {
   lane: HTMLElement;
   t0: number;
   t1: number;
+  /** First and last column this person is working: a stroke never leaves their shift. */
+  min: number;
+  max: number;
 }
 
 function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) => void; onAssign: (id: string, at: number) => void }) {
@@ -402,17 +405,17 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
 
   // painting: the stroke is tracked on the window so it never gets lost
   useEffect(() => {
-    const minuteAt = (e: { clientX: number }, lane: HTMLElement) => {
-      const { dayStart: ds, dayEnd: de, ppm: p } = range.current;
+    const minuteAt = (e: { clientX: number }, lane: HTMLElement, lo: number, hi: number) => {
+      const { dayStart: ds, ppm: p } = range.current;
       const x = e.clientX - lane.getBoundingClientRect().left;
       const t = ds + Math.floor(x / p / g) * g;
-      return Math.max(ds, Math.min(de - g, t));
+      return Math.max(lo, Math.min(hi, t));
     };
 
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d) return;
-      const t1 = minuteAt(e, d.lane);
+      const t1 = minuteAt(e, d.lane, d.min, d.max);
       if (t1 !== d.t1) {
         dragRef.current = { ...d, t1 };
         setDrag(dragRef.current);
@@ -511,8 +514,11 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
       /* not every browser allows it; the window listeners still cover the stroke */
     }
     const x = e.clientX - lane.getBoundingClientRect().left;
-    const t = Math.max(dayStart, Math.min(dayEnd - g, dayStart + Math.floor(x / ppm / g) * g));
-    const d = { shiftId: shift.id, lane, t0: t, t1: t };
+    // columns this person works, so a drag that starts or runs outside their shift stops at the edge
+    const min = dayStart + Math.floor((shift.start - dayStart) / g) * g;
+    const max = dayStart + Math.floor((shift.end - 1 - dayStart) / g) * g;
+    const t = Math.max(min, Math.min(max, dayStart + Math.floor(x / ppm / g) * g));
+    const d = { shiftId: shift.id, lane, t0: t, t1: t, min, max };
     dragRef.current = d;
     setDrag(d);
   }
@@ -525,8 +531,10 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
   }
 
   const brushDef = BRUSHES.find((b) => b.id === brush);
-  const dragLo = drag ? Math.min(drag.t0, drag.t1) : 0;
-  const dragHi = drag ? Math.max(drag.t0, drag.t1) + g : 0;
+  const dragShift = drag ? crew.find((s) => s.id === drag.shiftId) : undefined;
+  // the preview shows exactly what will be painted: never before clock-in or after clock-out
+  const dragLo = drag && dragShift ? Math.max(Math.min(drag.t0, drag.t1), dragShift.start) : 0;
+  const dragHi = drag && dragShift ? Math.min(Math.max(drag.t0, drag.t1) + g, dragShift.end) : 0;
 
   const coverage = useMemo(
     () => POSITIONS.map((p) => ({ p, runs: coverageRuns(day, settings, p) })),
