@@ -1,5 +1,5 @@
 import { AppState, Brk, CellPos, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
-import { defaultBreaks, newBreak, planBreaks, syncShiftBreaks, uid } from "./breaks";
+import { defaultBreaks, newBreak, syncShiftBreaks, uid } from "./breaks";
 import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent } from "./rotation";
 import { clearAutoCells, clearCover } from "./cover";
 import { normalizeEnd } from "./time";
@@ -63,9 +63,9 @@ export function saveState(state: AppState) {
 }
 
 /**
- * Re-run the automatic parts after a change.
- * - "redeal": place any unplaced breaks and re-deal unpinned columns (from `now` onward on a live day).
- * - "cells": re-deal unpinned columns only (a break moved or was stamped, but do not re-plan breaks).
+ * Re-run the automatic parts after a change. GDS never recommends or places breaks: they appear on
+ * the board only when the lead puts them there (Assign, the Break brush, or Start).
+ * - "redeal" / "cells": re-deal unpinned columns (from `now` onward on a live day).
  * - "fill": leave everything as it is and only fill columns that have no position yet.
  */
 export function refresh(
@@ -75,10 +75,7 @@ export function refresh(
   mode: "redeal" | "cells" | "fill" = "redeal",
 ): DayState {
   if (mode === "fill") return { ...day, cells: autoFill(day, state.settings, Infinity) };
-  const notBefore = now ?? -Infinity;
-  if (mode === "cells") return { ...day, cells: autoFill(day, state.settings, notBefore) };
-  const planned = planBreaks(day, state.settings, { notBefore });
-  return { ...planned, cells: autoFill(planned, state.settings, notBefore) };
+  return { ...day, cells: autoFill(day, state.settings, now ?? -Infinity) };
 }
 
 export function addShift(

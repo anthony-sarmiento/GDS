@@ -12,7 +12,7 @@ import { alignAfter, fmt, fmtDuration, fromInput, prettyDate, toInput } from "@/
 const byClockIn = (a: Shift, b: Shift) => a.start - b.start || a.name.localeCompare(b.name);
 
 export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
-  const { day, mutate, flash } = ctx;
+  const { day, mutate } = ctx;
 
   if (!day.shifts.length) {
     return (
@@ -57,17 +57,8 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
               <span className="badge break">Next</span> {FIRST_NAME(next.s.name)} at {fmt(effectiveStart(next.b))}
             </div>
           )}
-          {unplaced > 0 && <span className="badge warn">{unplaced} with no time planned</span>}
+          {unplaced > 0 && <span className="badge">{unplaced} not scheduled yet</span>}
           <span style={{ flex: 1 }} />
-          <button
-            className="btn"
-            onClick={() => {
-              mutate((d) => d, { replanBreaks: true, auto: "cells" });
-              flash("Breaks re-planned (taken and hand-set breaks kept)");
-            }}
-          >
-            Re-plan breaks
-          </button>
           <button className="btn primary" onClick={() => window.print()}>
             Print log
           </button>

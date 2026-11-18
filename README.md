@@ -35,7 +35,9 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
 
 ### Cover rule
 
-Someone has to be on a position while its holder is on break, and **you choose who**. GDS never moves anyone over by itself: planned breaks show a gap in Coverage until you pick a cover.
+Someone has to be on a position while its holder is on break, and **you choose who**. GDS never moves anyone over by itself.
+
+**GDS does not recommend or schedule breaks.** The board only shows a break once you put it there (Assign → Break, the Break brush, or Start). Until then each required break just sits in the Break timer as "Not scheduled".
 
 When you press **Start** on a break, place one with the Break brush, or send someone on **Break** from Assign, GDS asks **who rotates over**. It lists everyone free for the whole break with what moving them does ("Front stays staffed", "Bar drops to 1 (needs 2)", "Leaves Dungeon empty"), marks its best guess as **Suggested** without selecting it, and has a **Nobody** choice. When the position would be left short you have to pick someone (or Nobody) before it goes ahead. Your pick is pinned onto the position for the length of the break and removed again if the break is moved or erased. Moving someone with Assign asks the same question about the position they leave. Leads and people on a custom block have no position to cover, so they are never asked. Typing times into the break log re-covers quietly and only asks if a position would be left empty.
 
@@ -56,7 +58,7 @@ Break length is editable per break, and breaks can be added or removed. Rules li
 
 ### Engine notes
 
-- `lib/breaks.ts` – break rules and planner. Breaks are staggered (1 at a time by default), land near the middle of the shift, and prefer times when the floor is fully staffed.
+- `lib/breaks.ts` – break rules (how many, how long). It also contains a break-time planner that is no longer used by the app, since breaks are scheduled by hand.
 - `lib/rotation.ts` – the board solver. Per 5-minute column it picks positions that meet the staffing limits, rotate at block boundaries (default hourly), stay put in between, and favor positions someone has spent the least time at. Painted columns are never touched.
 - `lib/cover.ts` – the cover rule for breaks.
 - `lib/store.ts` – state helpers: painting, break placement, bump out.

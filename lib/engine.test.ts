@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requiredBreaks } from "./breaks";
+import { planBreaks, requiredBreaks } from "./breaks";
 import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, assignRange, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
 import { analyzeCover, assignCover, suggestMover } from "./cover";
@@ -21,7 +21,9 @@ function typicalDay(): DayState {
   add("Dee", h(17), h(23));
   add("Eli", h(17), h(23));
   add("Fay", h(17), h(23));
-  return refresh(day, initialState(), null);
+  // GDS no longer plans breaks by itself; these tests exercise the planner directly
+  const planned = planBreaks(refresh(day, initialState(), null), S);
+  return { ...planned, cells: autoFill(planned, S) };
 }
 
 /** The typical day with every break taken off the board, to test positions on their own. */
@@ -38,6 +40,24 @@ describe("break rules (from the paper log)", () => {
     expect(requiredBreaks(7.25)).toEqual([30]);
     expect(requiredBreaks(9)).toEqual([20, 30]);
     expect(requiredBreaks(12)).toEqual([20, 20, 30]);
+  });
+});
+
+describe("breaks are never recommended on the board", () => {
+  it("adding people and re-dealing leaves every break unscheduled", () => {
+    let day = emptyDay("2026-11-17");
+    for (const n of ["A", "B", "C", "D", "E"]) day = addShift(day, { name: n, start: h(11), end: h(17), lock: null, floater: false });
+    day = refresh(day, initialState(), null);
+    day = refresh(day, initialState(), h(13));
+    for (const s of day.shifts) for (const b of s.breaks) expect(b.planned).toBeNull();
+  });
+
+  it("only shows a break once the lead places one", () => {
+    let day = refresh(addShift(emptyDay("2026-11-17"), { name: "A", start: h(11), end: h(17), lock: null, floater: false }), initialState(), null);
+    const a = day.shifts[0];
+    expect(a.breaks[0].planned).toBeNull();
+    day = placeBreak(day, a.id, h(14), 20).day;
+    expect(day.shifts[0].breaks[0].planned).toBe(h(14));
   });
 });
 
