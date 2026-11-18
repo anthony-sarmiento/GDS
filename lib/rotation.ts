@@ -2,8 +2,12 @@ import { Brk, Cell, DayState, Limits, Position, POSITIONS, Settings, Shift } fro
 
 export const cellKey = (shiftId: string, cellStart: number) => `${shiftId}@${cellStart}`;
 
+/** Leads are not on the board. Everyone else rotates. */
+export const rotating = (shifts: Shift[]): Shift[] => shifts.filter((s) => !s.role);
+
 /** Start times of every board column that touches the day's shifts. */
-export function cellsFor(shifts: Shift[], settings: Settings): number[] {
+export function cellsFor(all: Shift[], settings: Settings): number[] {
+  const shifts = rotating(all);
   if (!shifts.length) return [];
   const { gridMinutes: g, anchor } = settings;
   const min = Math.min(...shifts.map((s) => s.start));
@@ -143,22 +147,29 @@ export function autoFill(
   recomputeFrom = -Infinity,
 ): Record<string, Cell> {
   const { gridMinutes: g, rotationMinutes: rot, anchor, limits } = settings;
+  const crew = rotating(day.shifts);
   const cells = cellsFor(day.shifts, settings);
   const out: Record<string, Cell> = {};
-  const minutes = new Map<string, Minutes>(day.shifts.map((s) => [s.id, zero()]));
-  const prev = new Map<string, Position | null>(day.shifts.map((s) => [s.id, null]));
+  const minutes = new Map<string, Minutes>(crew.map((s) => [s.id, zero()]));
+  const prev = new Map<string, Position | null>(crew.map((s) => [s.id, null]));
+  // cover blocks only live as long as the break they cover
+  const liveBreaks = new Set(day.shifts.flatMap((s) => s.breaks.filter((b) => breakSpan(b)).map((b) => b.id)));
+  const existingAt = (id: string, c: number): Cell | undefined => {
+    const e = day.cells[cellKey(id, c)];
+    return e && e.cover && !liveBreaks.has(e.cover) ? undefined : e;
+  };
 
   cells.forEach((c, idx) => {
     const recompute = c >= recomputeFrom;
     const boundary = (((c - anchor) % rot) + rot) % rot === 0;
-    const present = day.shifts.filter((s) => isPresent(s, c, g));
+    const present = crew.filter((s) => isPresent(s, c, g));
 
     const fixedCounts = zero();
     const free: Shift[] = [];
     const decided = new Map<string, Cell>();
 
     for (const s of present) {
-      const existing = day.cells[cellKey(s.id, c)];
+      const existing = existingAt(s.id, c);
       const onBreak = !!breakAtCell(s, c, g);
       if (existing && (existing.pinned || !recompute)) {
         decided.set(s.id, existing);
@@ -178,7 +189,7 @@ export function autoFill(
         prev: prev.get(s.id) ?? null,
         minutes: minutes.get(s.id)!,
         floater: s.floater,
-        keep: day.cells[cellKey(s.id, c)]?.pos ?? null,
+        keep: existingAt(s.id, c)?.pos ?? null,
       })),
       fixedCounts,
       limits,
@@ -203,9 +214,10 @@ export function autoFill(
 /** Minutes each person has spent (or is scheduled to spend) at each position, breaks excluded. */
 export function positionMinutes(day: DayState, settings: Settings): Record<string, Minutes> {
   const g = settings.gridMinutes;
-  const out: Record<string, Minutes> = Object.fromEntries(day.shifts.map((s) => [s.id, zero()]));
+  const crew = rotating(day.shifts);
+  const out: Record<string, Minutes> = Object.fromEntries(crew.map((s) => [s.id, zero()]));
   for (const c of cellsFor(day.shifts, settings)) {
-    for (const s of day.shifts) {
+    for (const s of crew) {
       const cell = day.cells[cellKey(s.id, c)];
       if (cell && !breakAtCell(s, c, g)) out[s.id][cell.pos] += overlap(s, c, g);
     }
@@ -217,7 +229,7 @@ export function positionMinutes(day: DayState, settings: Settings): Record<strin
 export function staffAt(day: DayState, settings: Settings, c: number): Record<Position, Shift[]> {
   const g = settings.gridMinutes;
   const out: Record<Position, Shift[]> = { front: [], bar: [], dungeon: [] };
-  for (const s of day.shifts) {
+  for (const s of rotating(day.shifts)) {
     if (!isPresent(s, c, g) || breakAtCell(s, c, g)) continue;
     const cell = day.cells[cellKey(s.id, c)];
     if (cell) out[cell.pos].push(s);
@@ -249,7 +261,7 @@ export function liveFloor(day: DayState, settings: Settings, t: number): LiveFlo
   const byPos: Record<Position, Shift[]> = { front: [], bar: [], dungeon: [] };
   const onBreak: LiveFloor["onBreak"] = [];
   if (c == null) return { cell: null, byPos, onBreak };
-  for (const s of day.shifts) {
+  for (const s of rotating(day.shifts)) {
     if (!(s.start <= t && t < s.end)) continue;
     const pos = day.cells[cellKey(s.id, c)]?.pos ?? null;
     const brk = activeBreak(s);
@@ -288,6 +300,7 @@ export interface BreakImpact {
 
 /** What happens to the position a person holds while they are on this break. */
 export function breakImpact(day: DayState, settings: Settings, shift: Shift, t: number): BreakImpact {
+  if (shift.role) return { position: null, remaining: 0, min: 0, status: "ok" };
   const g = settings.gridMinutes;
   const c = cellAt(cellsFor(day.shifts, settings), g, t);
   const cell = c == null ? undefined : day.cells[cellKey(shift.id, c)];
@@ -296,4 +309,56 @@ export function breakImpact(day: DayState, settings: Settings, shift: Shift, t: 
   const remaining = staffAt(day, settings, c)[position].filter((s) => s.id !== shift.id).length;
   const { min } = settings.limits[position];
   return { position, remaining, min, status: remaining >= min ? "ok" : staffStatus(remaining, settings.limits[position]) };
+}
+
+export interface PosRun {
+  pos: Position;
+  start: number;
+  end: number;
+}
+
+/** One person's day as merged blocks: neighbouring columns on the same position become one block. */
+export function positionRuns(day: DayState, settings: Settings, shift: Shift): { runs: PosRun[]; pins: [number, number][] } {
+  const g = settings.gridMinutes;
+  const runs: PosRun[] = [];
+  const pins: [number, number][] = [];
+  for (const c of cellsFor(day.shifts, settings)) {
+    if (!isPresent(shift, c, g)) continue;
+    const cell = day.cells[cellKey(shift.id, c)];
+    if (!cell) continue;
+    const start = Math.max(c, shift.start);
+    const end = Math.min(c + g, shift.end);
+    const last = runs[runs.length - 1];
+    if (last && last.pos === cell.pos && last.end === start) last.end = end;
+    else runs.push({ pos: cell.pos, start, end });
+    if (cell.pinned) {
+      const lp = pins[pins.length - 1];
+      if (lp && lp[1] === start) lp[1] = end;
+      else pins.push([start, end]);
+    }
+  }
+  return { runs, pins };
+}
+
+export interface CoverageRun {
+  start: number;
+  end: number;
+  count: number;
+  status: StaffStatus | "none";
+}
+
+/** How many people are on a position over the day, merged into runs of the same count. */
+export function coverageRuns(day: DayState, settings: Settings, pos: Position): CoverageRun[] {
+  const g = settings.gridMinutes;
+  const crew = rotating(day.shifts);
+  const out: CoverageRun[] = [];
+  for (const c of cellsFor(day.shifts, settings)) {
+    const anyone = crew.some((s) => isPresent(s, c, g));
+    const count = staffAt(day, settings, c)[pos].length;
+    const status: CoverageRun["status"] = anyone ? staffStatus(count, settings.limits[pos]) : "none";
+    const last = out[out.length - 1];
+    if (last && last.count === count && last.status === status && last.end === c) last.end = c + g;
+    else out.push({ start: c, end: c + g, count, status });
+  }
+  return out;
 }

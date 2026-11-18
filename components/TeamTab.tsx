@@ -2,18 +2,45 @@
 
 import { useState } from "react";
 import { Ctx } from "./ctx";
-import { Position, POSITIONS, POSITION_LABEL } from "@/lib/types";
+import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
 import { requiredBreaks } from "@/lib/breaks";
 import { fmt, fmtHours, fromInput, hoursOf, normalizeEnd, toInput } from "@/lib/time";
 
-const PRESETS: { label: string; start: string; end: string; floater?: boolean }[] = [
-  { label: "Lead opener 10–5:15", start: "10:00", end: "17:15" },
-  { label: "Opener 11–5", start: "11:00", end: "17:00" },
-  { label: "Closer 5–11", start: "17:00", end: "23:00" },
-  { label: "Closer 5–12", start: "17:00", end: "00:00" },
-  { label: "Floater 1–9", start: "13:00", end: "21:00", floater: true },
+const PRESETS: { label: string; start?: string; end?: string; floater?: boolean; assign?: string }[] = [
+  { label: "Opening Lead 10–5:15", start: "10:00", end: "17:15", assign: "lead:opening" },
+  { label: "Opener 11–5", start: "11:00", end: "17:00", assign: "" },
+  { label: "Closer 5–11", start: "17:00", end: "23:00", assign: "" },
+  { label: "Closer 5–12", start: "17:00", end: "00:00", assign: "" },
+  { label: "Floater 1–9", start: "13:00", end: "21:00", floater: true, assign: "" },
+  { label: "Closing Lead", start: "17:00", end: "23:00", assign: "lead:closing" },
+  { label: "Inventory Lead", assign: "lead:inventory" },
 ];
+
+/** One dropdown covers where someone works: rotating, staying put, or a lead role. */
+function parseAssign(v: string): { lock: Position | null; role: LeadRole | null } {
+  if (v.startsWith("lead:")) return { lock: null, role: v.slice(5) as LeadRole };
+  return { lock: (v || null) as Position | null, role: null };
+}
+const assignOf = (s: Pick<Shift, "lock" | "role">) => (s.role ? `lead:${s.role}` : (s.lock ?? ""));
+
+function AssignOptions() {
+  return (
+    <>
+      <option value="">Rotates</option>
+      {POSITIONS.map((p) => (
+        <option key={p} value={p}>
+          Stays at {POSITION_LABEL[p]}
+        </option>
+      ))}
+      {(Object.keys(LEAD_LABEL) as LeadRole[]).map((r) => (
+        <option key={r} value={`lead:${r}`}>
+          {LEAD_LABEL[r]}
+        </option>
+      ))}
+    </>
+  );
+}
 
 const ROTATION_CHOICES = [30, 60, 90, 120];
 
@@ -28,7 +55,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
   const [name, setName] = useState("");
   const [start, setStart] = useState("11:00");
   const [end, setEnd] = useState("17:00");
-  const [lock, setLock] = useState<Position | "">("");
+  const [assign, setAssign] = useState("");
   const [floater, setFloater] = useState(false);
 
   const previous = lastTeamBefore(state, day.date);
@@ -39,14 +66,16 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
     const en = fromInput(end);
     if (!name.trim() || s == null || en == null) return;
     remember(name);
-    mutate((d) => addShift(d, { name, start: s, end: en, lock: lock || null, floater }), { auto: true });
+    const { lock, role } = parseAssign(assign);
+    mutate((d) => addShift(d, { name, start: s, end: en, lock, floater: role ? false : floater, role }), { auto: true });
     setName("");
   }
 
   function applyPreset(p: (typeof PRESETS)[number]) {
-    setStart(p.start);
-    setEnd(p.end);
+    if (p.start) setStart(p.start);
+    if (p.end) setEnd(p.end);
     setFloater(!!p.floater);
+    setAssign(p.assign ?? "");
   }
 
   return (
@@ -88,20 +117,17 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             <input type="time" className="field" value={end} onChange={(e) => setEnd(e.target.value)} required />
           </label>
           <label className="lbl">
-            Position
-            <select className="field" value={lock} onChange={(e) => setLock(e.target.value as Position | "")}>
-              <option value="">Rotates</option>
-              {POSITIONS.map((p) => (
-                <option key={p} value={p}>
-                  Stays at {POSITION_LABEL[p]}
-                </option>
-              ))}
+            Assignment
+            <select className="field" value={assign} onChange={(e) => setAssign(e.target.value)}>
+              <AssignOptions />
             </select>
           </label>
-          <label className="checkbox">
-            <input type="checkbox" checked={floater} onChange={(e) => setFloater(e.target.checked)} />
-            Floater
-          </label>
+          {!assign.startsWith("lead:") && (
+            <label className="checkbox">
+              <input type="checkbox" checked={floater} onChange={(e) => setFloater(e.target.checked)} />
+              Floater
+            </label>
+          )}
           <button className="btn primary" type="submit">
             Add
           </button>
@@ -185,32 +211,30 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
               />
             </label>
             <label className="lbl">
-              Position
+              Assignment
               <select
                 className="field"
-                value={s.lock ?? ""}
-                onChange={(e) =>
-                  mutate((d) => updateShift(d, s.id, { lock: (e.target.value || null) as Position | null }), {
-                    auto: true,
-                  })
-                }
+                value={assignOf(s)}
+                onChange={(e) => {
+                  const { lock, role } = parseAssign(e.target.value);
+                  mutate((d) => updateShift(d, s.id, { lock, role, floater: role ? false : s.floater }), { auto: true });
+                }}
               >
-                <option value="">Rotates</option>
-                {POSITIONS.map((p) => (
-                  <option key={p} value={p}>
-                    Stays at {POSITION_LABEL[p]}
-                  </option>
-                ))}
+                <AssignOptions />
               </select>
             </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={s.floater}
-                onChange={(e) => mutate((d) => updateShift(d, s.id, { floater: e.target.checked }), { auto: true })}
-              />
-              Floater
-            </label>
+            {s.role ? (
+              <span className="badge">{LEAD_LABEL[s.role]}</span>
+            ) : (
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.floater}
+                  onChange={(e) => mutate((d) => updateShift(d, s.id, { floater: e.target.checked }), { auto: true })}
+                />
+                Floater
+              </label>
+            )}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: "0.8rem" }}>
                 {fmtHours(hoursOf(s.start, s.end))} · {fmt(s.start)}–{fmt(s.end)}
@@ -236,20 +260,6 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
         <p>Saved on this device.</p>
       </div>
       <div className="card settings-grid">
-        <label className="lbl">
-          Board columns
-          <select
-            className="field"
-            value={settings.gridMinutes}
-            onChange={(e) => {
-              setSettings({ gridMinutes: Number(e.target.value) });
-              flash("Board rebuilt for this day");
-            }}
-          >
-            <option value={30}>30 minutes</option>
-            <option value={15}>15 minutes</option>
-          </select>
-        </label>
         <label className="lbl">
           Auto-rotate every
           <select
@@ -291,7 +301,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
       </div>
 
       <div className="section-title">
-        <h2>Staffing (SOP)</h2>
+        <h2>Staffing</h2>
         <p>How many people belong on each position. Auto-deal follows this, and the board flags anything short.</p>
       </div>
       <div className="card settings-grid">

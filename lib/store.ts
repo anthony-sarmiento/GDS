@@ -1,6 +1,7 @@
-import { AppState, Brk, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, Position, Settings, Shift } from "./types";
+import { AppState, Brk, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
 import { defaultBreaks, newBreak, planBreaks, syncShiftBreaks, uid } from "./breaks";
-import { autoFill, breakAtCell, cellAt, cellKey, cellsFor } from "./rotation";
+import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor } from "./rotation";
+import { clearAutoCells, clearCover } from "./cover";
 import { normalizeEnd } from "./time";
 
 export const STORAGE_KEY = "gds:v1";
@@ -23,6 +24,8 @@ export function mergeSettings(saved?: Partial<Settings>): Settings {
   return {
     ...DEFAULT_SETTINGS,
     ...(saved ?? {}),
+    // the board always works at the finest step now
+    gridMinutes: DEFAULT_SETTINGS.gridMinutes,
     limits: {
       front: { ...DEFAULT_LIMITS.front, ...(saved?.limits?.front ?? {}) },
       bar: { ...DEFAULT_LIMITS.bar, ...(saved?.limits?.bar ?? {}) },
@@ -36,10 +39,15 @@ export function loadState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState();
     const parsed = JSON.parse(raw) as Partial<AppState>;
+    const oldGrid = parsed.settings?.gridMinutes !== DEFAULT_SETTINGS.gridMinutes;
+    const days = parsed.days ?? {};
     return {
       settings: mergeSettings(parsed.settings),
       names: parsed.names ?? [],
-      days: parsed.days ?? {},
+      // columns saved at an older step size do not line up, so deal those days again
+      days: oldGrid
+        ? Object.fromEntries(Object.entries(days).map(([d, v]) => [d, { ...v, cells: {} }]))
+        : days,
     };
   } catch {
     return initialState();
@@ -75,7 +83,14 @@ export function refresh(
 
 export function addShift(
   day: DayState,
-  input: { name: string; start: number; end: number; lock: Position | null; floater: boolean },
+  input: {
+    name: string;
+    start: number;
+    end: number;
+    lock: Position | null;
+    floater: boolean;
+    role?: LeadRole | null;
+  },
 ): DayState {
   const end = normalizeEnd(input.start, input.end);
   const shift: Shift = {
@@ -83,8 +98,9 @@ export function addShift(
     name: input.name.trim(),
     start: input.start,
     end,
-    lock: input.lock,
-    floater: input.floater,
+    lock: input.role ? null : input.lock,
+    floater: input.role ? false : input.floater,
+    role: input.role ?? null,
     breaks: defaultBreaks({ start: input.start, end }),
     breaksCustom: false,
   };
@@ -151,7 +167,7 @@ export function addBreak(day: DayState, shiftId: string, length = 20): DayState 
 
 export function removeBreak(day: DayState, shiftId: string, breakId: string): DayState {
   return {
-    ...day,
+    ...clearCover(day, breakId),
     shifts: day.shifts.map((s) =>
       s.id === shiftId ? { ...s, breaksCustom: true, breaks: s.breaks.filter((b) => b.id !== breakId) } : s,
     ),
@@ -208,54 +224,63 @@ export function eraseCells(day: DayState, settings: Settings, shiftId: string, c
   const cells = { ...day.cells };
   for (const c of cellStarts) delete cells[cellKey(shiftId, c)];
   const g = settings.gridMinutes;
-  return {
-    ...day,
-    cells,
-    shifts: day.shifts.map((s) =>
-      s.id !== shiftId
-        ? s
-        : {
-            ...s,
-            breaks: s.breaks.map((b) =>
-              b.start == null && cellStarts.some((c) => breakAtCell({ ...s, breaks: [b] }, c, g))
-                ? { ...b, planned: null, locked: false }
-                : b,
-            ),
-          },
-    ),
-  };
+  const dropped: string[] = [];
+  const shifts = day.shifts.map((s) =>
+    s.id !== shiftId
+      ? s
+      : {
+          ...s,
+          breaks: s.breaks.map((b) => {
+            if (b.start == null && cellStarts.some((c) => breakAtCell({ ...s, breaks: [b] }, c, g))) {
+              dropped.push(b.id);
+              return { ...b, planned: null, locked: false };
+            }
+            return b;
+          }),
+        },
+  );
+  let next: DayState = { ...day, cells, shifts };
+  const spans = day.shifts
+    .find((s) => s.id === shiftId)
+    ?.breaks.filter((b) => dropped.includes(b.id))
+    .map((b) => breakSpan(b)) ?? [];
+  for (const id of dropped) next = clearCover(next, id);
+  return clearAutoCells(next, g, spans);
 }
 
 /**
- * Put one of this person's breaks at a column. Uses a break that has no time yet,
+ * Put one of this person's breaks at an exact minute. Uses a break that has no time yet,
  * otherwise the nearest one that has not been taken, otherwise adds a new one.
- * Dragging over several columns sets the break's length to the dragged span.
+ * `length` overrides the break's length (drag to set it). Returns the break that was used.
  */
 export function placeBreak(
   day: DayState,
-  settings: Settings,
   shiftId: string,
-  startCell: number,
-  spanMinutes: number | null,
-): DayState {
+  startMinute: number,
+  length: number | null,
+): { day: DayState; breakId: string | null } {
   const shift = day.shifts.find((s) => s.id === shiftId);
-  if (!shift) return day;
+  if (!shift) return { day, breakId: null };
   const open = shift.breaks.filter((b) => b.start == null);
   const target =
     open.find((b) => b.planned == null) ??
-    [...open].sort((a, b) => Math.abs((a.planned ?? 0) - startCell) - Math.abs((b.planned ?? 0) - startCell))[0];
-
-  const dragged = spanMinutes != null && spanMinutes > settings.gridMinutes ? spanMinutes : null;
+    [...open].sort((a, b) => Math.abs((a.planned ?? 0) - startMinute) - Math.abs((b.planned ?? 0) - startMinute))[0];
 
   if (!target) {
-    const brk = { ...newBreak(dragged ?? 20), planned: startCell, locked: true };
-    return { ...day, shifts: day.shifts.map((s) => (s.id === shiftId ? { ...s, breaksCustom: true, breaks: [...s.breaks, brk] } : s)) };
+    const brk = { ...newBreak(length ?? 20), planned: startMinute, locked: true };
+    return {
+      day: { ...day, shifts: day.shifts.map((s) => (s.id === shiftId ? { ...s, breaksCustom: true, breaks: [...s.breaks, brk] } : s)) },
+      breakId: brk.id,
+    };
   }
-  return updateBreak(day, shiftId, target.id, {
-    planned: startCell,
-    locked: true,
-    ...(dragged ? { length: dragged } : {}),
-  });
+  return {
+    day: updateBreak(clearCover(day, target.id), shiftId, target.id, {
+      planned: startMinute,
+      locked: true,
+      ...(length ? { length } : {}),
+    }),
+    breakId: target.id,
+  };
 }
 
 /**
@@ -271,7 +296,7 @@ export function bumpOut(
 ): DayState {
   const out = day.shifts.find((s) => s.id === outId);
   if (!out) return day;
-  const incoming = inId ? day.shifts.find((s) => s.id === inId) : undefined;
+  const incoming = inId ? day.shifts.find((s) => s.id === inId && !s.role) : undefined;
   const g = settings.gridMinutes;
   const rot = settings.rotationMinutes;
   const time = Math.max(out.start + g, Math.min(out.end, t));
