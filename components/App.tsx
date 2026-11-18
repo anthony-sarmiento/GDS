@@ -13,7 +13,7 @@ import {
   toInput,
 } from "@/lib/time";
 import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
-import { planBreaks, breakStatus } from "@/lib/breaks";
+import { breakStatus } from "@/lib/breaks";
 import { cellKey, cellsFor, isPresent, rotating } from "@/lib/rotation";
 import { Ctx, CoverPrompt } from "./ctx";
 import CoverDialog from "./CoverDialog";
@@ -71,9 +71,6 @@ export default function App() {
       setState((prev) => {
         const base = prev.days[date] ?? emptyDay(date);
         let next = fn(base);
-        if (opts?.replanBreaks) {
-          next = planBreaks(next, prev.settings, { replanAll: true, notBefore: nowRef.current ?? -Infinity });
-        }
         if (opts?.auto) next = refresh(next, prev, nowRef.current, opts.auto === "fill" ? "fill" : opts.auto === "cells" ? "cells" : "redeal");
         return { ...prev, days: { ...prev.days, [date]: next } };
       });
@@ -95,12 +92,6 @@ export default function App() {
           day = refresh({ ...base, cells: {} }, next, nowRef.current);
         } else if (patch.rotationMinutes !== undefined || patch.limits !== undefined) {
           day = refresh(base, next, nowRef.current);
-        } else if (patch.maxConcurrentBreaks !== undefined) {
-          day = refresh(
-            planBreaks(base, settings, { replanAll: true, notBefore: nowRef.current ?? -Infinity }),
-            next,
-            nowRef.current,
-          );
         }
         return { ...next, days: { ...prev.days, [date]: day } };
       });
@@ -119,8 +110,7 @@ export default function App() {
     const gaps = cellsFor(day.shifts, state.settings).some((c) =>
       rotating(day.shifts).some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
     );
-    const unplaced = day.shifts.some((s) => s.breaks.some((b) => b.planned == null && b.start == null));
-    if (gaps || unplaced) mutate((d) => d, { auto: true });
+    if (gaps) mutate((d) => d, { auto: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, date, day.shifts.length]);
 

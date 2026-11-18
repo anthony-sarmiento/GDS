@@ -318,18 +318,6 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             }}
           />
         </label>
-        <label className="lbl">
-          Most people on break at once
-          <select
-            className="field"
-            value={settings.maxConcurrentBreaks}
-            onChange={(e) => setSettings({ maxConcurrentBreaks: Number(e.target.value) })}
-          >
-            <option value={1}>1 (recommended)</option>
-            <option value={2}>2</option>
-            <option value={3}>3</option>
-          </select>
-        </label>
       </div>
 
       <div className="section-title">

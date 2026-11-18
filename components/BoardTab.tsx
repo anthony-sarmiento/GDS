@@ -264,7 +264,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
     <div className="section">
       <div className="section-title">
         <h2>Break timer</h2>
-        <p>On break now first, then next up. Start moves a cover onto the position. End when they are back.</p>
+        <p>On break now first. Tap Start when someone goes, and pick who rotates over. End when they are back.</p>
       </div>
       {!items.length && <div className="card muted">No breaks coming up.</div>}
       <div className="queue">
@@ -291,7 +291,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
                         t > backAt ? `${fmtDuration(t - backAt)} over` : `${fmtDuration(backAt - t)} left`
                       }`
                     : at == null
-                      ? "No time planned"
+                      ? "Not scheduled · tap Start when they go"
                       : `${delta >= 0 ? (delta > 15 ? "Overdue" : "Due") : "Planned"} ${fmt(at)}${
                           delta < 0 ? ` · in ${fmtDuration(-delta)}` : delta > 0 ? ` · ${fmtDuration(delta)} ago` : ""
                         }`}
