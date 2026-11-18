@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
+import AssignDialog from "./AssignDialog";
 import { Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/rotation";
 import { bumpOut, endBreak, eraseCells, paintCells, placeBreak, startBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fmtShort, fromInput, toInput } from "@/lib/time";
+import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
 
 type Brush = "none" | Position | "other" | "break" | "erase";
 
@@ -34,23 +36,6 @@ const BRUSHES: { id: Brush; label: string; key: string; cls: string }[] = [
 ];
 
 const ZOOMS = [1.5, 2, 3, 4, 6]; // pixels per minute
-
-const LABELS_KEY = "gds:custom-labels";
-function loadLabels(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(LABELS_KEY) ?? "[]");
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 8) : [];
-  } catch {
-    return [];
-  }
-}
-function saveLabels(list: string[]) {
-  try {
-    localStorage.setItem(LABELS_KEY, JSON.stringify(list));
-  } catch {
-    /* private mode: the labels just are not remembered */
-  }
-}
 
 /** Name shown on a block. */
 const blockName = (pos: string, label?: string) =>
@@ -71,6 +56,7 @@ function useCompact(): boolean {
 export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
   const { day, now, mutate } = ctx;
   const [bumpFor, setBumpFor] = useState<string | null>(null);
+  const [assignFor, setAssignFor] = useState<{ shiftId?: string; at?: number } | null>(null);
   const crew = rotating(day.shifts);
   const leads = day.shifts.filter((s) => s.role);
 
@@ -92,13 +78,16 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
   return (
     <div>
-      {now != null && <NowPanel ctx={ctx} onBump={setBumpFor} />}
+      {now != null && <NowPanel ctx={ctx} onBump={setBumpFor} onAssign={(id) => setAssignFor({ shiftId: id })} />}
       {now != null && <BreakQueue ctx={ctx} />}
 
       <div className="section-title">
         <h2>Board</h2>
-        <p>Pick a brush, then drag across a row for an exact time range, or click a block to repaint all of it.</p>
+        <p>Tap Assign to send someone somewhere at a time, or tap a row. Brushes paint exact ranges by hand.</p>
         <span className="spacer" />
+        <button className="btn primary" onClick={() => setAssignFor({})}>
+          Assign
+        </button>
         <button
           className="btn"
           onClick={() => {
@@ -149,7 +138,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         </div>
       )}
 
-      <Timeline ctx={ctx} onBump={setBumpFor} />
+      <Timeline ctx={ctx} onBump={setBumpFor} onAssign={(id, at) => setAssignFor({ shiftId: id, at })} />
 
       <div className="section-title">
         <h2>Time at each position</h2>
@@ -158,13 +147,16 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
       <Fairness ctx={ctx} />
 
       {bumpFor && <BumpDialog ctx={ctx} outId={bumpFor} onClose={() => setBumpFor(null)} />}
+      {assignFor && (
+        <AssignDialog ctx={ctx} shiftId={assignFor.shiftId} at={assignFor.at} onClose={() => setAssignFor(null)} />
+      )}
     </div>
   );
 }
 
 /* ---------- live panel ---------- */
 
-function NowPanel({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
+function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) => void; onAssign: (id: string) => void }) {
   const { day, settings, now } = ctx;
   const t = now!;
   const floor = liveFloor(day, settings, t);
@@ -215,6 +207,9 @@ function NowPanel({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
                     {s.floater && <span className="badge">Floater</span>}
                     {s.lock && <span className="badge">Stays</span>}
                     <small>until {fmtShort(Math.min(s.end, nextBlock))}</small>
+                    <button className="btn ghost small" title={`Assign ${s.name} somewhere`} onClick={() => onAssign(s.id)}>
+                      Assign
+                    </button>
                     <button className="btn ghost small" title={`Bump ${s.name} out`} onClick={() => onBump(s.id)}>
                       Bump
                     </button>
@@ -343,7 +338,7 @@ interface Drag {
   t1: number;
 }
 
-function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
+function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) => void; onAssign: (id: string, at: number) => void }) {
   const { day, settings, now, flash } = ctx;
   const g = settings.gridMinutes;
   const crew = rotating(day.shifts);
@@ -469,7 +464,7 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
           c.mutate((dd) => paintCells(dd, shift.id, targets, b, name), { auto: "fill" });
           if (name) {
             setRecent((cur) => {
-              const next = [name, ...cur.filter((x) => x.toLowerCase() !== name.toLowerCase())].slice(0, 8);
+              const next = pushLabel(cur, name);
               saveLabels(next);
               return next;
             });
@@ -488,8 +483,24 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
     };
   }, [g]);
 
+  // Pan mode: a tap (not a scroll or drag) on a row starts an assignment from that time
+  const tapRef = useRef<{ id: string; x: number; y: number } | null>(null);
+  function tap(e: React.MouseEvent<HTMLDivElement>, shift: Shift) {
+    const t0 = tapRef.current;
+    tapRef.current = null;
+    if (brush !== "none" || !t0 || t0.id !== shift.id) return;
+    if (Math.abs(e.clientX - t0.x) > 6 || Math.abs(e.clientY - t0.y) > 6) return;
+    const x = e.clientX - e.currentTarget.getBoundingClientRect().left;
+    const t = dayStart + Math.floor(x / ppm / g) * g;
+    if (t < shift.start - g || t >= shift.end) return;
+    onAssign(shift.id, Math.max(t, shift.start));
+  }
+
   function down(e: React.PointerEvent<HTMLDivElement>, shift: Shift) {
-    if (brush === "none") return;
+    if (brush === "none") {
+      tapRef.current = { id: shift.id, x: e.clientX, y: e.clientY };
+      return;
+    }
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     const lane = e.currentTarget;
@@ -583,8 +594,8 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
       <p className="muted palette-hint" style={{ margin: 0 }}>
         {brush === "none" &&
           (compact
-            ? "Pan mode: swipe to scroll. Pick a brush to paint, then drag sideways across a row."
-            : "Pick a brush to start (keys 1–4, 0 to erase, Esc to put it down).")}
+            ? "Tap a row to assign from that time, or tap a name. Pick a brush to paint ranges by hand."
+            : "Click a row to assign someone from that time, or click a name. Pick a brush (keys 1–5, 0 to erase) to paint ranges by hand.")}
         {brush === "break" &&
           "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
         {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
@@ -651,7 +662,13 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
               <div className="tl-row" key={s.id}>
                 <div className="tl-label">
                   <div className="who-line">
-                    <span className="who-name">{s.name || "(no name)"}</span>
+                    <button
+                      className="who-name link"
+                      onClick={() => onAssign(s.id, Math.max(s.start, now ?? s.start))}
+                      title={`Assign ${s.name} somewhere`}
+                    >
+                      {s.name || "(no name)"}
+                    </button>
                     {s.end > (now ?? s.start) && (
                       <button
                         className="btn ghost small bump"
@@ -670,7 +687,7 @@ function Timeline({ ctx, onBump }: { ctx: Ctx; onBump: (id: string) => void }) {
                     {s.sentHomeAt != null ? ` · sent home${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
                   </small>
                 </div>
-                <div className="tl-lane" style={{ width }} onPointerDown={(e) => down(e, s)}>
+                <div className="tl-lane" style={{ width }} onPointerDown={(e) => down(e, s)} onClick={(e) => tap(e, s)}>
                   <div className="off" style={{ left: 0, width: Math.max(0, X(s.start)) }} />
                   <div className="off" style={{ left: X(s.end), width: Math.max(0, width - X(s.end)) }} />
 
