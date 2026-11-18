@@ -35,7 +35,7 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
 
 ### Cover rule
 
-Someone has to be on a position while its holder is on break. When a break is placed or started, GDS moves a cover onto the position for the length of the break (the floater first, then anyone whose own position can spare them) and pins it. If the position would be left empty and nobody can move, it asks before going ahead. If it stays attended but below its minimum, the board shows it amber.
+Someone has to be on a position while its holder is on break. When you press **Start** on a break (or place one with the Break brush), GDS asks **who rotates over**. It suggests the best person (the floater first, then anyone whose own position can spare them), lists everyone else who is free with what moving them does ("Front stays staffed", "Bar drops to 1 (needs 2)", "Leaves Dungeon empty"), and has a **Nobody** choice. Your pick is pinned onto the position for the length of the break and removed again if the break is moved or erased. Leads and people on a custom block have no position to cover, so they are never asked. Typing times into the break log re-covers quietly and only asks if a position would be left empty.
 
 ### Staffing
 

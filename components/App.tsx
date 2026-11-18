@@ -15,7 +15,8 @@ import {
 import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
 import { planBreaks, breakStatus } from "@/lib/breaks";
 import { cellKey, cellsFor, isPresent, rotating } from "@/lib/rotation";
-import { Ctx } from "./ctx";
+import { Ctx, CoverPrompt } from "./ctx";
+import CoverDialog from "./CoverDialog";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
 import TeamTab from "./TeamTab";
@@ -31,6 +32,7 @@ export default function App() {
   const [editingClock, setEditingClock] = useState(false);
   const [tab, setTab] = useState<Tab>("board");
   const [toast, setToast] = useState<string | null>(null);
+  const [coverPrompt, setCoverPrompt] = useState<CoverPrompt | null>(null);
 
   // load saved data once we're in the browser
   useEffect(() => {
@@ -123,7 +125,7 @@ export default function App() {
   }, [hydrated, date, day.shifts.length]);
 
   const ctx: Ctx = useMemo(
-    () => ({ state, day, settings: state.settings, now, live: live && preview == null, mutate, setSettings, remember, flash }),
+    () => ({ state, day, settings: state.settings, now, live: live && preview == null, mutate, setSettings, remember, flash, askCover: setCoverPrompt }),
     [state, day, now, live, preview, mutate, setSettings, remember, flash],
   );
 
@@ -244,6 +246,8 @@ export default function App() {
         {tab === "breaks" && <BreaksTab ctx={ctx} goTeam={() => setTab("team")} />}
         {tab === "team" && <TeamTab ctx={ctx} />}
       </main>
+
+      {coverPrompt && <CoverDialog key={coverPrompt.title + coverPrompt.when} prompt={coverPrompt} onClose={() => setCoverPrompt(null)} />}
 
       {toast && (
         <div className="toast" role="status">

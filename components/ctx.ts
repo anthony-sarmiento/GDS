@@ -1,4 +1,20 @@
-import { AppState, DayState, Settings } from "@/lib/types";
+import { AppState, DayState, Position, Settings } from "@/lib/types";
+import { CoverOption } from "@/lib/cover";
+
+/** Asks the lead who rotates over to a position while its holder is on break. */
+export interface CoverPrompt {
+  title: string;
+  confirmLabel: string;
+  holder: string;
+  position: Position;
+  /** "2:10 PM–2:30 PM · 20 min" */
+  when: string;
+  remaining: number;
+  min: number;
+  options: CoverOption[];
+  /** `null` means nobody covers. */
+  onConfirm: (choice: string | null) => void;
+}
 
 export interface Ctx {
   state: AppState;
@@ -22,6 +38,8 @@ export interface Ctx {
   /** Remember a typed name for autocomplete. */
   remember: (name: string) => void;
   flash: (msg: string) => void;
+  /** Open the "who covers?" question. */
+  askCover: (prompt: CoverPrompt) => void;
 }
 
 export const FIRST_NAME = (name: string) => name.trim().split(/\s+/)[0] || "—";

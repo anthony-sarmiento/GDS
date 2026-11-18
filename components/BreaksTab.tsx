@@ -262,7 +262,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
   const text = (p: Partial<Brk>) => mutate((d) => updateBreak(d, shift.id, brk.id, p));
   // anything that moves or resizes the break goes through the cover rule
   const change = (p: Partial<Brk>) =>
-    runBreakChange(ctx, (d) => ({ day: updateBreak(d, shift.id, brk.id, p), breakId: brk.id }));
+    runBreakChange(ctx, (d) => ({ day: updateBreak(d, shift.id, brk.id, p), breakId: brk.id }), { ask: false });
   const time = (v: string) => {
     const m = fromInput(v);
     return m == null ? null : alignAfter(m, shift.start);

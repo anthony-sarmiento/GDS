@@ -448,7 +448,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
 
       if (b === "break") {
         const length = moved ? hi - lo : null;
-        runBreakChange(c, (dd) => placeBreak(dd, shift.id, moved ? lo : d.t0, length));
+        runBreakChange(c, (dd) => placeBreak(dd, shift.id, moved ? lo : d.t0, length), { verb: "place" });
       } else if (b === "erase") {
         const hit = shift.breaks.find((br) => {
           const sp = breakSpan(br);

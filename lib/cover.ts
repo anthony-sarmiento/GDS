@@ -28,70 +28,139 @@ export interface CoverResult {
   span: [number, number] | null;
 }
 
+export interface CoverOption {
+  shift: Shift;
+  /** Where they are standing now. */
+  from: Position;
+  /** People left on their own position if they move. */
+  fromAfter: number;
+  fromMin: number;
+  /** What moving them does to the position they leave. */
+  harm: "none" | "short" | "empty";
+  /** Stays at one position all day. */
+  locked: boolean;
+  /** What GDS would pick on its own. */
+  recommended: boolean;
+}
+
+export interface CoverAnalysis {
+  position: Position | null;
+  span: [number, number] | null;
+  spanCells: number[];
+  /** People who stay on the position while the holder is away. */
+  remaining: number;
+  min: number;
+  /** The position would be left below its minimum without a cover. */
+  needs: boolean;
+  /** Everyone who could rotate over, best first. */
+  options: CoverOption[];
+}
+
 /**
- * A break needs somebody else on the position while the person is away.
- * If the position would drop below its minimum, move the best available person onto it for the
- * length of the break: the floater first, then anyone whose own position can spare them.
- * The moved blocks are pinned and tagged with the break so they vanish if the break does.
+ * Who could rotate onto the position while its holder is on this break, and what it costs.
+ * Best first: GDS's own pick (floater, then anyone their position can spare), then people whose
+ * position stays fully staffed, then ones it leaves short, then ones it would leave empty.
  */
-export function assignCover(input: DayState, settings: Settings, shiftId: string, breakId: string): CoverResult {
+export function analyzeCover(input: DayState, settings: Settings, shiftId: string, breakId: string): CoverAnalysis {
   const day = clearCover(input, breakId);
-  const none = (status: CoverResult["status"] = "none-needed"): CoverResult => ({
-    day,
-    status,
-    position: null,
-    cover: null,
-    from: null,
-    span: null,
-    remaining: 0,
-  });
+  const empty: CoverAnalysis = { position: null, span: null, spanCells: [], remaining: 0, min: 0, needs: false, options: [] };
 
   const shift = day.shifts.find((s) => s.id === shiftId);
   const brk = shift?.breaks.find((b) => b.id === breakId);
-  if (!shift || !brk || shift.role) return none();
+  if (!shift || !brk || shift.role) return empty;
   const span = breakSpan(brk);
-  if (!span) return none();
+  if (!span) return empty;
 
   const g = settings.gridMinutes;
   const spanCells = cellsFor(day.shifts, settings).filter(
     (c) => c < span[1] && c + g > span[0] && isPresent(shift, c, g),
   );
   const c0 = spanCells[0];
-  if (c0 == null) return none();
+  if (c0 == null) return empty;
   const position = day.cells[cellKey(shift.id, c0)]?.pos;
   // on a custom block (or nothing at all): no position to cover
-  if (!position || position === "other") return none();
+  if (!position || position === "other") return empty;
 
-  const crew = rotating(day.shifts);
   const posOf = (s: Shift): Position | undefined => {
     const p = day.cells[cellKey(s.id, c0)]?.pos;
     return p === "other" ? undefined : p;
   };
-  const working = crew.filter((s) => s.id !== shift.id && isPresent(s, c0, g) && !breakAtCell(s, c0, g));
+  const working = rotating(day.shifts).filter(
+    (s) => s.id !== shift.id && s.sentHomeAt == null && isPresent(s, c0, g) && !breakAtCell(s, c0, g),
+  );
   const countAt = (p: Position) => working.filter((s) => posOf(s) === p).length;
-
   const remaining = countAt(position);
-  if (remaining >= settings.limits[position].min) return { ...none(), position, span, remaining };
+  const min = settings.limits[position].min;
+  const needs = remaining < min;
 
-  // Anyone free for the whole break who is not locked to their spot.
-  const movable = working.filter((s) => {
-    const from = posOf(s);
-    return from && from !== position && !s.lock && !spanCells.some((c) => breakAtCell(s, c, g));
-  });
-  const order = (a: Shift, b: Shift) =>
-    Number(b.floater) - Number(a.floater) || countAt(posOf(b)!) - countAt(posOf(a)!);
-  // First choice: someone their own position can spare. If the position would otherwise be left
-  // empty, take someone whose position stays attended (it runs short, but nobody is left alone).
-  const spare = movable.filter((s) => countAt(posOf(s)!) - 1 >= settings.limits[posOf(s)!].min).sort(order);
-  const lenient = remaining === 0 ? movable.filter((s) => countAt(posOf(s)!) - 1 >= 1).sort(order) : [];
-  const pick = spare[0] ?? lenient[0];
-  if (!pick) return { ...none(remaining === 0 ? "uncovered" : "short"), position, span, remaining };
+  // free for the whole break and not already on this position
+  const options: CoverOption[] = working
+    .filter((s) => {
+      const from = posOf(s);
+      return from && from !== position && !spanCells.some((c) => breakAtCell(s, c, g));
+    })
+    .map((s) => {
+      const from = posOf(s)!;
+      const fromAfter = countAt(from) - 1;
+      const fromMin = settings.limits[from].min;
+      const harm: CoverOption["harm"] = fromAfter <= 0 ? "empty" : fromAfter < fromMin ? "short" : "none";
+      return { shift: s, from, fromAfter, fromMin, harm, locked: !!s.lock, recommended: false };
+    });
 
+  const order = (a: CoverOption, b: CoverOption) =>
+    Number(b.shift.floater) - Number(a.shift.floater) || countAt(b.from) - countAt(a.from);
+  const spare = options.filter((o) => o.harm === "none" && !o.locked).sort(order);
+  const lenient = remaining === 0 ? options.filter((o) => o.fromAfter >= 1 && !o.locked).sort(order) : [];
+  const pick = needs ? (spare[0] ?? lenient[0]) : undefined;
+  if (pick) pick.recommended = true;
+
+  const harmRank = { none: 0, short: 1, empty: 2 };
+  options.sort(
+    (a, b) =>
+      Number(b.recommended) - Number(a.recommended) ||
+      Number(a.locked) - Number(b.locked) ||
+      harmRank[a.harm] - harmRank[b.harm] ||
+      Number(b.shift.floater) - Number(a.shift.floater),
+  );
+  return { position, span, spanCells, remaining, min, needs, options };
+}
+
+/**
+ * A break needs somebody else on the position while the person is away.
+ * `choice` says who: undefined lets GDS pick (floater first, then anyone their position can spare),
+ * a shift id is the person you chose, and null means nobody covers.
+ * The moved blocks are pinned and tagged with the break so they vanish if the break does.
+ */
+export function assignCover(
+  input: DayState,
+  settings: Settings,
+  shiftId: string,
+  breakId: string,
+  choice?: string | null,
+): CoverResult {
+  const day = clearCover(input, breakId);
+  const a = analyzeCover(day, settings, shiftId, breakId);
+  const base: CoverResult = {
+    day,
+    status: "none-needed",
+    position: a.position,
+    cover: null,
+    from: null,
+    span: a.span,
+    remaining: a.remaining,
+  };
+  if (!a.position || !a.span) return base;
+
+  const picked =
+    choice === undefined ? a.options.find((o) => o.recommended) : choice === null ? undefined : a.options.find((o) => o.shift.id === choice);
+  if (!picked) return a.needs ? { ...base, status: a.remaining === 0 ? "uncovered" : "short" } : base;
+
+  const g = settings.gridMinutes;
   const cells = { ...day.cells };
-  for (const c of spanCells) {
-    if (isPresent(pick, c, g)) cells[cellKey(pick.id, c)] = { pos: position, pinned: true, cover: breakId };
+  for (const c of a.spanCells) {
+    if (isPresent(picked.shift, c, g)) cells[cellKey(picked.shift.id, c)] = { pos: a.position, pinned: true, cover: breakId };
   }
-  return { day: { ...day, cells }, status: "covered", position, cover: pick, from: posOf(pick) ?? null, span, remaining };
+  return { ...base, day: { ...day, cells }, status: "covered", cover: picked.shift, from: picked.from };
 }
 
 /** Drop the automatic (unpinned) blocks inside these time spans so the board fills them in fresh. */
@@ -116,6 +185,7 @@ export function applyBreakChange(
   before: DayState,
   settings: Settings,
   build: (d: DayState) => { day: DayState; breakId: string | null },
+  choice?: string | null,
 ): DayState {
   const r = build(before);
   if (!r.breakId) return r.day;
@@ -133,7 +203,7 @@ export function applyBreakChange(
     newB ? breakSpan(newB.brk) : null,
   ]);
   const owner = newB?.shift ?? oldB?.shift;
-  if (owner) day = assignCover(day, settings, owner.id, r.breakId).day;
+  if (owner) day = assignCover(day, settings, owner.id, r.breakId, choice).day;
   return day;
 }
 
