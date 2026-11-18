@@ -212,12 +212,15 @@ export function applyBreakChange(
   };
   const oldB = find(before);
   const newB = find(r.day);
-  let day = clearAutoCells(r.day, settings.gridMinutes, [
+  const owner = newB?.shift ?? oldB?.shift;
+  // Work out the cover first: it needs to see where everyone is standing right now.
+  // Only then clear the automatic blocks where the break was and is, so the board fills them in
+  // fresh. The cover blocks are pinned, so that cleanup leaves them alone.
+  let day = owner ? assignCover(r.day, settings, owner.id, r.breakId, choice).day : r.day;
+  day = clearAutoCells(day, settings.gridMinutes, [
     oldB ? breakSpan(oldB.brk) : null,
     newB ? breakSpan(newB.brk) : null,
   ]);
-  const owner = newB?.shift ?? oldB?.shift;
-  if (owner) day = assignCover(day, settings, owner.id, r.breakId, choice).day;
   return day;
 }
 
