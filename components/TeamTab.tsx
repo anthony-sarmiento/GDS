@@ -5,7 +5,7 @@ import { Ctx } from "./ctx";
 import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
 import { requiredBreaks } from "@/lib/breaks";
-import { fmt, fmtHours, fromInput, hoursOf, normalizeEnd, toInput } from "@/lib/time";
+import { fmt, fmtDuration, fmtHours, fromInput, hoursOf, normalizeEnd, toInput } from "@/lib/time";
 
 const PRESETS: { label: string; start?: string; end?: string; floater?: boolean; assign?: string }[] = [
   { label: "Opening Lead 10–5:15", start: "10:00", end: "17:15", assign: "lead:opening" },
@@ -317,6 +317,20 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
               if (v != null) setSettings({ anchor: v });
             }}
           />
+        </label>
+        <label className="lbl">
+          Remind about bathroom checks every
+          <select
+            className="field"
+            value={settings.checkMinutes}
+            onChange={(e) => setSettings({ checkMinutes: Number(e.target.value) })}
+          >
+            {[30, 45, 60, 75, 90, 105, 120, 150, 180].map((m) => (
+              <option key={m} value={m}>
+                {fmtDuration(m)}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

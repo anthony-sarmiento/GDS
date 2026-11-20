@@ -9,6 +9,7 @@ import { analyzeCover, applyBreakChange, coverOptions } from "@/lib/cover";
 import { assignRange, paintCells, placeBreak } from "@/lib/store";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
 import { alignAfter, fmt, fmtDuration, fromInput, toInput } from "@/lib/time";
+import { breakKind, breaksOwed, KIND_LABEL, onLog } from "@/lib/breaks";
 
 const round5 = (t: number) => Math.round(t / 5) * 5;
 
@@ -51,7 +52,9 @@ export default function AssignDialog({
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => setRecent(loadLabels()), []);
 
-  const breakLen = (p: typeof person) => p?.breaks.find((b) => b.start == null)?.length ?? 20;
+  // the break log decides the default: the first break this person still owes (20, or 30 for the long kind)
+  const breakLen = (p: typeof person) =>
+    (p?.breaks.find((b) => b.start == null && b.planned == null) ?? p?.breaks.find((b) => b.start == null))?.length ?? 20;
   const blockEnd = (t: number) => {
     const rot = settings.rotationMinutes;
     const end = settings.anchor + (Math.floor((t - settings.anchor) / rot) + 1) * rot;
@@ -184,8 +187,30 @@ export default function AssignDialog({
     onClose();
   }
 
-  const durations: { label: string; end: number }[] = isBreak
-    ? [15, 20, 30, 45, 60].map((m) => ({ label: `${m} min`, end: from + m }))
+  // what the break log says about the break being placed
+  const owed = breaksOwed(person);
+  const kind = breakKind(until - from);
+  const breakLength = until - from;
+  const logNote = ((): { cls: string; text: string } | null => {
+    if (!isBreak || !valid) return null;
+    if (!onLog(breakLength))
+      return { cls: "warn", text: `The log has 20 min or 30–60 min breaks. ${fmtDuration(breakLength)} is off the log.` };
+    if (owed[kind].unplaced > 0) return null;
+    if (owed[kind].placed > 0)
+      return { cls: "", text: `${person.name}'s ${KIND_LABEL[kind]} break is already placed, so this moves it.` };
+    return { cls: "warn", text: `${person.name}'s log has no ${KIND_LABEL[kind]} break left, so this counts as an extra break.` };
+  })();
+  const owedText = (["short", "long"] as const)
+    .filter((k) => owed[k].unplaced + owed[k].placed > 0)
+    .map((k) => `${KIND_LABEL[k]} × ${owed[k].unplaced + owed[k].placed}`)
+    .join(" · ");
+
+  const durations: { label: string; end: number; hint?: string }[] = isBreak
+    ? [20, 30, 45, 60].map((m) => ({
+        label: `${m} min`,
+        end: from + m,
+        hint: owed[breakKind(m)].unplaced > 0 ? "due" : undefined,
+      }))
     : [
         { label: "30 min", end: from + 30 },
         { label: "1 hr", end: from + 60 },
@@ -294,6 +319,7 @@ export default function AssignDialog({
               return (
                 <button key={d.label} type="button" className="btn small" aria-pressed={active} onClick={() => setUntil(end)}>
                   {d.label}
+                  {d.hint && <small className="chip-hint">{d.hint}</small>}
                 </button>
               );
             })}
@@ -309,6 +335,12 @@ export default function AssignDialog({
               {fmt(from)}–{fmt(until)} ({fmtDuration(until - from)})
             </div>
           )}
+          {isBreak && person && (
+            <div className="muted log-line">
+              Break log: {owedText ? `still owed ${owedText}` : "all of this person's breaks are taken"}
+            </div>
+          )}
+          {logNote && <div className={`note ${logNote.cls}`}>{logNote.text}</div>}
           {valid && position && (
             <div className={`note ${needsCover ? (impact?.remaining === 0 ? "bad" : "warn") : ""}`}>
               {needsCover

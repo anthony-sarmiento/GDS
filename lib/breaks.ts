@@ -19,6 +19,29 @@ export function requiredBreaks(hours: number): number[] {
   return [20, 20, 30];
 }
 
+/**
+ * The log allows two kinds of break: a 20 minute one and a 30 to 60 minute one.
+ * Anything under 30 minutes counts as the short kind.
+ */
+export type BreakKind = "short" | "long";
+export const breakKind = (length: number): BreakKind => (length < 30 ? "short" : "long");
+export const KIND_LABEL: Record<BreakKind, string> = { short: "20 min", long: "30–60 min" };
+/** The lengths the log offers for each kind, shortest first. */
+export const KIND_LENGTHS: Record<BreakKind, number[]> = { short: [20], long: [30, 45, 60] };
+
+/** Does this length fit one of the log's break kinds exactly? */
+export const onLog = (length: number): boolean => length === 20 || (length >= 30 && length <= 60);
+
+/** What a person still owes on the log: breaks not taken yet, split into not placed / placed on the board. */
+export function breaksOwed(shift: Pick<Shift, "breaks">): Record<BreakKind, { unplaced: number; placed: number }> {
+  const out = { short: { unplaced: 0, placed: 0 }, long: { unplaced: 0, placed: 0 } };
+  for (const b of shift.breaks) {
+    if (b.start != null) continue;
+    out[breakKind(b.length)][b.planned == null ? "unplaced" : "placed"] += 1;
+  }
+  return out;
+}
+
 let counter = 0;
 export function uid(prefix = "id"): string {
   counter += 1;

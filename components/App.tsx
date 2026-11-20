@@ -6,6 +6,7 @@ import { AppState, DayState, Settings } from "@/lib/types";
 import {
   addDays,
   fmt,
+  fmtDuration,
   fromInput,
   operatingDate,
   operatingMinutes,
@@ -21,8 +22,10 @@ import CoverDialog from "./CoverDialog";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
 import TeamTab from "./TeamTab";
+import ChecksTab, { ago } from "./ChecksTab";
+import { addCheck, checkStatus } from "@/lib/checks";
 
-type Tab = "board" | "breaks" | "team";
+type Tab = "board" | "breaks" | "checks" | "team";
 
 export default function App() {
   const [state, setState] = useState<AppState>(initialState);
@@ -34,6 +37,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("board");
   const [toast, setToast] = useState<string | null>(null);
   const [coverPrompt, setCoverPrompt] = useState<CoverPrompt | null>(null);
+  const [snoozeUntil, setSnoozeUntil] = useState<number | null>(null);
 
   // load saved data once we're in the browser
   useEffect(() => {
@@ -174,6 +178,10 @@ export default function App() {
     [state, day, now, live, preview, mutate, setSettings, remember, flash],
   );
 
+  // gentle reminder when it has been a while since the last bathroom check; "Later" hides it for 30 minutes
+  const checks = checkStatus(day, state.settings, now);
+  const showNudge = checks.due && tab !== "checks" && (snoozeUntil == null || (now ?? 0) >= snoozeUntil);
+
   const remaining = day.shifts.reduce(
     (n, s) => n + s.breaks.filter((b) => breakStatus(b) !== "done").length,
     0,
@@ -204,6 +212,7 @@ export default function App() {
           </div>
         </div>
 
+        <div className="tools">
         <div className="undo-group" role="group" aria-label="Undo and redo">
           <button
             className="btn"
@@ -277,6 +286,7 @@ export default function App() {
             </button>
           )}
         </div>
+        </div>
       </header>
 
       <div className="print-only print-title">GEEK&rsquo;D DAILY BREAK LOG</div>
@@ -286,6 +296,7 @@ export default function App() {
           [
             ["board", "Board", null],
             ["breaks", "Breaks", day.shifts.length ? remaining : null],
+            ["checks", "Checks", null],
             ["team", "Team", day.shifts.length || null],
           ] as [Tab, string, number | null][]
         ).map(([id, label, count]) => (
@@ -298,6 +309,7 @@ export default function App() {
           >
             {label}
             {count != null && <span className="count">{count}</span>}
+            {id === "checks" && checks.due && <span className="count alert" aria-label="Check due">!</span>}
           </button>
         ))}
       </nav>
@@ -307,8 +319,40 @@ export default function App() {
         {preview != null && " — previewing the board at a different time"}
       </p>
 
+      {showNudge && checks.since != null && (
+        <div className="nudge no-print" role="status">
+          <span className="nudge-icon" aria-hidden>
+            🚻
+          </span>
+          <p>
+            {checks.never ? (
+              <>
+                <b>Hey!</b> No bathroom check has been logged yet. The store has been open {fmtDuration(checks.since)}.
+              </>
+            ) : (
+              <>
+                <b>Hey!</b> Your last bathroom check was <b>{ago(checks.since)}</b>.
+              </>
+            )}
+          </p>
+          <button
+            className="btn primary small"
+            onClick={() => {
+              mutate((d) => addCheck(d, now ?? 0));
+              flash(`Bathroom check logged at ${fmt(now ?? 0)}`);
+            }}
+          >
+            Log a check
+          </button>
+          <button className="btn ghost small" onClick={() => setSnoozeUntil((now ?? 0) + 30)}>
+            Later
+          </button>
+        </div>
+      )}
+
       <main>
         {tab === "board" && <BoardTab ctx={ctx} goTeam={() => setTab("team")} />}
+        {tab === "checks" && <ChecksTab ctx={ctx} />}
         {tab === "breaks" && <BreaksTab ctx={ctx} goTeam={() => setTab("team")} />}
         {tab === "team" && <TeamTab ctx={ctx} />}
       </main>

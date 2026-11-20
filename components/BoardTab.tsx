@@ -291,7 +291,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
                         t > backAt ? `${fmtDuration(t - backAt)} over` : `${fmtDuration(backAt - t)} left`
                       }`
                     : at == null
-                      ? "Not scheduled · tap Start when they go"
+                      ? "Not scheduled"
                       : `${delta >= 0 ? (delta > 15 ? "Overdue" : "Due") : "Planned"} ${fmt(at)}${
                           delta < 0 ? ` · in ${fmtDuration(-delta)}` : delta > 0 ? ` · ${fmtDuration(delta)} ago` : ""
                         }`}

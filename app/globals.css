@@ -72,8 +72,17 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px 20px;
-  padding: 14px 0;
+  gap: 12px 24px;
+  padding: 12px 0 14px;
+}
+
+/* undo, date and clock sit together on the right */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px 14px;
 }
 
 .brand {
@@ -84,13 +93,13 @@ h3 {
 }
 
 .brand img {
-  height: 92px;
+  height: 76px;
   width: auto;
   display: block;
 }
 
 .brand-text h1 {
-  font-size: 2.6rem;
+  font-size: 2.3rem;
   line-height: 1;
   color: var(--green);
 }
@@ -165,6 +174,12 @@ h3 {
   border-bottom: 1px solid var(--line);
   margin-bottom: 20px;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {
@@ -452,6 +467,7 @@ label.lbl {
 }
 
 .person small {
+  white-space: nowrap;
   margin-left: auto;
   font-weight: 500;
   color: var(--muted);
@@ -1541,6 +1557,10 @@ button,
     order: 2;
   }
 
+  .tools {
+    display: contents;
+  }
+
   /* the clock chip and Undo / Redo share the third row */
   .clock {
     order: 3;
@@ -2244,4 +2264,203 @@ button,
 }
 .cover-effect.bad {
   color: var(--danger);
+}
+
+/* ---------- bathroom checks ---------- */
+.tab .count.alert {
+  background: var(--warn);
+  color: var(--navy-900);
+  font-weight: 700;
+}
+
+.nudge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: rgba(255, 194, 71, 0.12);
+  border: 1px solid rgba(255, 194, 71, 0.45);
+  border-radius: var(--radius);
+}
+
+.nudge p {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.nudge b {
+  color: var(--warn);
+}
+
+.nudge-icon {
+  font-size: 1.3rem;
+}
+
+.check-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.check-card.due {
+  border-color: rgba(255, 194, 71, 0.6);
+}
+
+.check-card.soon {
+  border-color: rgba(92, 200, 255, 0.5);
+}
+
+.check-big {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.check-big .check-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.check-big b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.1rem;
+  letter-spacing: 0.02em;
+  color: var(--green);
+}
+
+.check-card.due .check-big b {
+  color: var(--warn);
+}
+
+.check-big small {
+  color: var(--muted);
+}
+
+.check-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--navy-700);
+  overflow: hidden;
+}
+
+.check-bar span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+
+.check-card.soon .check-bar span {
+  background: var(--break);
+}
+
+.check-card.due .check-bar span {
+  background: var(--warn);
+}
+
+.check-form {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.check-form .field {
+  width: 100%;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.stat {
+  background: var(--navy-800);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.6rem;
+  letter-spacing: 0.02em;
+}
+
+.stat span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.check-list {
+  padding: 4px 16px;
+}
+
+.check-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.check-row:last-child {
+  border-bottom: none;
+}
+
+.check-row .gap {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.check-row .gap.long {
+  color: var(--warn);
+}
+
+.chip-hint {
+  margin-left: 6px;
+  color: var(--green);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chip-row .btn[aria-pressed="true"] .chip-hint {
+  color: var(--navy-900);
+}
+
+.log-line {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 700px) {
+  .check-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .check-form .btn {
+    grid-column: 1 / -1;
+  }
+  .check-row {
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+  }
+  .check-row .btn {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .check-big b {
+    font-size: 1.8rem;
+  }
 }
