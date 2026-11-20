@@ -1,5 +1,5 @@
 import { AppState, Brk, CellPos, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
-import { defaultBreaks, newBreak, syncShiftBreaks, uid } from "./breaks";
+import { breakKind, defaultBreaks, newBreak, syncShiftBreaks, uid } from "./breaks";
 import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent } from "./rotation";
 import { clearAutoCells, clearCover } from "./cover";
 import { normalizeEnd } from "./time";
@@ -12,6 +12,7 @@ export const emptyDay = (date: string): DayState => ({
   closer: "",
   shifts: [],
   cells: {},
+  checks: [],
 });
 
 export const initialState = (): AppState => ({
@@ -287,7 +288,10 @@ export function placeBreak(
 ): { day: DayState; breakId: string | null } {
   const shift = day.shifts.find((s) => s.id === shiftId);
   if (!shift) return { day, breakId: null };
-  const open = shift.breaks.filter((b) => b.start == null);
+  // with a length given, use the break of that kind from the log (20, or 30-60); no match adds an extra one
+  const open = shift.breaks.filter(
+    (b) => b.start == null && (length == null || breakKind(b.length) === breakKind(length)),
+  );
   const target =
     open.find((b) => b.planned == null) ??
     [...open].sort((a, b) => Math.abs((a.planned ?? 0) - startMinute) - Math.abs((b.planned ?? 0) - startMinute))[0];

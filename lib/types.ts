@@ -73,6 +73,14 @@ export interface Cell {
   cover?: string;
 }
 
+/** One bathroom check. Anyone can do one, so `by` is optional. */
+export interface Check {
+  id: string;
+  /** Minutes on the operating day's clock (can exceed 1440 after midnight). */
+  time: number;
+  by: string;
+}
+
 export interface DayState {
   date: string; // YYYY-MM-DD
   opener: string;
@@ -80,6 +88,8 @@ export interface DayState {
   shifts: Shift[];
   /** key = `${shiftId}@${cellStartMinute}`; one cell per grid column the person is working. */
   cells: Record<string, Cell>;
+  /** Bathroom checks done today. Missing on days saved before checks existed. */
+  checks?: Check[];
 }
 
 /** SOP staffing for one position: how many people should be on it at once. */
@@ -97,6 +107,8 @@ export interface Settings {
   anchor: number;
   /** How many people may be on break at the same time. */
   maxConcurrentBreaks: number;
+  /** A bathroom check is recommended this often (minutes). A reminder only, never required. */
+  checkMinutes: number;
   limits: Record<Position, Limits>;
 }
 
@@ -118,5 +130,6 @@ export const DEFAULT_SETTINGS: Settings = {
   gridMinutes: 5,
   anchor: 10 * 60,
   maxConcurrentBreaks: 1,
+  checkMinutes: 90,
   limits: DEFAULT_LIMITS,
 };
