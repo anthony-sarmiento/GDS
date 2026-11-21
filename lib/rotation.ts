@@ -58,162 +58,51 @@ export function activeBreak(s: Shift): Brk | undefined {
 export type Minutes = Record<Position, number>;
 const zero = (): Minutes => ({ front: 0, bar: 0, dungeon: 0 });
 
-// Tuning knobs for the assignment cost function.
-const PER_HOUR_AT_POSITION = 12; // each hour already spent at a position makes it less attractive
-const SAME_AS_LAST = 20; // staying put when a new rotation block starts
-const CHANGE_MID_BLOCK = 40; // moving in the middle of a block (unless covering)
-const FLOATER_MOVE = 5; // floaters move freely
-const KEEP = 30; // leaving someone where the board already had them, so small edits do not reshuffle everything
-const UNDER: Record<Position, number> = { front: 1000, bar: 900, dungeon: 800 }; // per missing person
-const OVER = 600; // per person above the maximum
-const EXTRA: Record<Position, number> = { bar: 1, front: 4, dungeon: 50 }; // where the people above the minimum go first
-
 /**
- * Pick positions for everyone free to move in one column.
- * Brute-forces the (small) search space for the cheapest mix of:
- *   - every position at or above its SOP minimum (Front/Bar before Dungeon),
- *   - nobody above a position's maximum,
- *   - spare people go to the Bar first, then Front,
- *   - each person drawn toward the positions they have spent the least time at,
- *   - rotate at block boundaries, stay put in between.
+ * Work out every column from what the lead has assigned. GDS never picks a position for anyone.
+ * - Pinned cells (assigned or painted by the lead, plus cover blocks) are kept as they are.
+ * - A column with nothing assigned inherits the position the person was last given, so someone stays
+ *   where they were sent until the lead moves them. Cover blocks and custom spots ("Tournament") are
+ *   temporary: afterwards the person goes back to where they were.
+ * - Someone with "Stays at" set is on that position whenever nothing else is assigned.
+ * - Before a person's first assignment the column stays empty ("needs a position").
+ * - Cover blocks only live as long as the break they cover.
+ * Everything that is not pinned is derived, so this can be run again after any change.
  */
-function assign(
-  free: { prev: Position | null; minutes: Minutes; floater: boolean; keep: Position | null }[],
-  fixedCounts: Minutes,
-  limits: Record<Position, Limits>,
-  boundary: boolean,
-  tieShift: number,
-): Position[] {
-  const n = free.length;
-  if (n === 0) return [];
+export function autoFill(day: DayState, settings: Settings): Record<string, Cell> {
+  const g = settings.gridMinutes;
+  const crew = rotating(day.shifts);
+  const out: Record<string, Cell> = {};
+  const last = new Map<string, Position>();
+  const liveBreaks = new Set(day.shifts.flatMap((s) => s.breaks.filter((b) => breakSpan(b)).map((b) => b.id)));
 
-  const personCost = free.map((p, i) =>
-    POSITIONS.map((q, qi) => {
-      let c = (p.minutes[q] / 60) * PER_HOUR_AT_POSITION + ((qi + i + tieShift) % POSITIONS.length) * 0.01;
-      if (p.keep && p.keep !== q) c += KEEP;
-      if (p.prev) {
-        if (boundary) c += p.prev === q ? SAME_AS_LAST : 0;
-        else c += p.prev === q ? 0 : p.floater ? FLOATER_MOVE : CHANGE_MID_BLOCK;
+  for (const c of cellsFor(day.shifts, settings)) {
+    for (const s of crew) {
+      if (!isPresent(s, c, g)) continue;
+      const key = cellKey(s.id, c);
+      const e = day.cells[key];
+      if (e && e.pinned && !(e.cover && !liveBreaks.has(e.cover))) {
+        out[key] = e;
+        if (e.pos !== "other" && !e.cover) last.set(s.id, e.pos);
+        continue;
       }
-      return c;
-    }),
-  );
-
-  let best = Infinity;
-  let bestPick: number[] = [];
-  const pick = new Array<number>(n).fill(0);
-  const counts = POSITIONS.map((q) => fixedCounts[q]);
-
-  const walk = (i: number, running: number) => {
-    if (running >= best) return;
-    if (i === n) {
-      let total = running;
-      POSITIONS.forEach((q, qi) => {
-        const c = counts[qi];
-        const { min, max } = limits[q];
-        if (c < min) total += UNDER[q] * (min - c);
-        if (c > max) total += OVER * (c - max);
-        total += EXTRA[q] * Math.max(0, Math.min(c, max) - min);
-      });
-      if (total < best) {
-        best = total;
-        bestPick = pick.slice();
-      }
-      return;
+      const base = s.lock ?? last.get(s.id);
+      if (base) out[key] = { pos: base, pinned: false };
     }
-    for (let qi = 0; qi < POSITIONS.length; qi += 1) {
-      pick[i] = qi;
-      counts[qi] += 1;
-      walk(i + 1, running + personCost[i][qi]);
-      counts[qi] -= 1;
-    }
-  };
-  walk(0, 0);
-
-  return bestPick.map((qi) => POSITIONS[qi]);
+  }
+  return out;
 }
 
-/**
- * (Re)deal the board.
- * - Pinned cells (painted by hand) never move.
- * - Columns that start before `recomputeFrom` keep what they have (only gaps are filled),
- *   so changing things mid-shift does not rewrite the past. Pass Infinity to only fill gaps.
- * - People on break keep their position in the deal. Nobody is moved over to cover a break on
- *   their own: the lead picks the cover (see cover.ts), and Coverage shows the gap until then.
- */
-export function autoFill(
-  day: DayState,
-  settings: Settings,
-  recomputeFrom = -Infinity,
-): Record<string, Cell> {
-  const { gridMinutes: g, rotationMinutes: rot, anchor, limits } = settings;
-  const crew = rotating(day.shifts);
-  const cells = cellsFor(day.shifts, settings);
-  const out: Record<string, Cell> = {};
-  const minutes = new Map<string, Minutes>(crew.map((s) => [s.id, zero()]));
-  const prev = new Map<string, Position | null>(crew.map((s) => [s.id, null]));
-  // cover blocks only live as long as the break they cover
-  const liveBreaks = new Set(day.shifts.flatMap((s) => s.breaks.filter((b) => breakSpan(b)).map((b) => b.id)));
-  const existingAt = (id: string, c: number): Cell | undefined => {
-    const e = day.cells[cellKey(id, c)];
-    return e && e.cover && !liveBreaks.has(e.cover) ? undefined : e;
-  };
+/** Does this person have a position (or custom spot) at time `t`? Nobody gets one until the lead assigns it. */
+export function hasPositionAt(day: DayState, settings: Settings, shift: Shift, t: number): boolean {
+  const c = cellAt(cellsFor(day.shifts, settings), settings.gridMinutes, t);
+  return c != null && !!day.cells[cellKey(shift.id, c)];
+}
 
-  cells.forEach((c, idx) => {
-    const recompute = c >= recomputeFrom;
-    const boundary = (((c - anchor) % rot) + rot) % rot === 0;
-    const present = crew.filter((s) => isPresent(s, c, g));
-
-    const fixedCounts = zero();
-    const free: Shift[] = [];
-    const decided = new Map<string, Cell>();
-
-    for (const s of present) {
-      const existing = existingAt(s.id, c);
-      const onBreak = !!breakAtCell(s, c, g);
-      if (existing && (existing.pinned || !recompute)) {
-        decided.set(s.id, existing);
-        // A custom block ("Tournament") keeps someone busy but is not one of the three positions.
-        // Someone on break still holds their position here: who covers is the lead's call, so the
-        // board never moves people over by itself.
-        if (existing.pos !== "other") fixedCounts[existing.pos] += 1;
-      } else if (onBreak) {
-        const held = prev.get(s.id) ?? s.lock ?? "front";
-        decided.set(s.id, { pos: held, pinned: false });
-        fixedCounts[held] += 1;
-      } else if (s.lock) {
-        decided.set(s.id, { pos: s.lock, pinned: false });
-        fixedCounts[s.lock] += 1;
-      } else {
-        free.push(s);
-      }
-    }
-
-    const picks = assign(
-      free.map((s) => ({
-        prev: prev.get(s.id) ?? null,
-        minutes: minutes.get(s.id)!,
-        floater: s.floater,
-        keep: ((p) => (p === "other" ? null : (p ?? null)))(existingAt(s.id, c)?.pos),
-      })),
-      fixedCounts,
-      limits,
-      boundary,
-      idx,
-    );
-    free.forEach((s, i) => decided.set(s.id, { pos: picks[i], pinned: false }));
-
-    for (const s of present) {
-      const cell = decided.get(s.id)!;
-      out[cellKey(s.id, c)] = cell;
-      if (!breakAtCell(s, c, g) && cell.pos !== "other") {
-        minutes.get(s.id)![cell.pos] += overlap(s, c, g);
-        prev.set(s.id, cell.pos);
-      }
-    }
-  });
-
-  return out;
+/** Any stretch of this person's shift with nothing assigned yet. */
+export function needsPosition(day: DayState, settings: Settings, shift: Shift): boolean {
+  const g = settings.gridMinutes;
+  return cellsFor(day.shifts, settings).some((c) => isPresent(shift, c, g) && !day.cells[cellKey(shift.id, c)]);
 }
 
 /** Minutes each person has spent (or is scheduled to spend) at each position, breaks excluded. */

@@ -22,8 +22,19 @@ function typicalDay(): DayState {
   add("Eli", h(17), h(23));
   add("Fay", h(17), h(23));
   // GDS no longer plans breaks by itself; these tests exercise the planner directly
-  const planned = planBreaks(refresh(day, initialState(), null), S);
-  return { ...planned, cells: autoFill(planned, S) };
+  const planned = planBreaks(refresh(day, initialState()), S);
+  return assignedBoard(planned);
+}
+
+/** What the lead does before people arrive: give each one a starting position for the rest of their shift. */
+function assignedBoard(day: DayState): DayState {
+  const start: Record<string, Position> = { Alex: "front", Bri: "bar", Cam: "dungeon", Flo: "bar", Dee: "front", Eli: "bar", Fay: "dungeon" };
+  let d = day;
+  for (const s of day.shifts) {
+    const p = start[s.name];
+    if (p) d = assignRange(d, S, s.id, s.start, s.end, p);
+  }
+  return { ...d, cells: autoFill(d, S) };
 }
 
 /** The typical day with every break taken off the board, to test positions on their own. */
@@ -32,6 +43,84 @@ function quietDay(): DayState {
   const stripped = { ...d, shifts: d.shifts.map((s) => ({ ...s, breaks: s.breaks.map((b) => ({ ...b, planned: null })) })) };
   return { ...stripped, cells: autoFill(stripped, S) };
 }
+
+describe("nobody is given a position until the lead assigns it", () => {
+  const team = () => {
+    let day = emptyDay("2026-11-17");
+    for (const n of ["A", "B", "C", "D", "E"]) day = addShift(day, { name: n, start: h(11), end: h(17), lock: null, floater: false });
+    return day;
+  };
+
+  it("adding people leaves every column empty", () => {
+    const day = refresh(team(), initialState());
+    expect(Object.keys(day.cells)).toHaveLength(0);
+    for (const c of cellsFor(day.shifts, S)) {
+      const by = staffAt(day, S, c);
+      expect(by.front.length + by.bar.length + by.dungeon.length).toBe(0);
+    }
+  });
+
+  it("forgets positions an older version dealt out on its own", () => {
+    const day = team();
+    const old = { ...day, cells: { [cellKey(day.shifts[0].id, h(12))]: { pos: "bar" as const, pinned: false } } };
+    expect(autoFill(old, S)).toEqual({});
+  });
+
+  it("a starting position stays until the lead moves the person", () => {
+    let day = team();
+    const a = day.shifts[0];
+    day = assignRange(day, S, a.id, h(11), h(12), "front");
+    day = refresh(day, initialState());
+    for (const t of [h(11), h(11, 55), h(12), h(14), h(16, 55)]) expect(day.cells[cellKey(a.id, t)]?.pos).toBe("front");
+    // only the first hour was assigned; the rest is carried on
+    expect(day.cells[cellKey(a.id, h(11, 30))]?.pinned).toBe(true);
+    expect(day.cells[cellKey(a.id, h(14))]?.pinned).toBe(false);
+    // somebody else was never assigned, so they stay empty
+    expect(day.cells[cellKey(day.shifts[1].id, h(14))]).toBeUndefined();
+  });
+
+  it("moving someone later carries the new position forward", () => {
+    let day = team();
+    const a = day.shifts[0];
+    day = assignRange(day, S, a.id, h(11), h(13), "front");
+    day = assignRange(day, S, a.id, h(13), h(14), "bar");
+    day = refresh(day, initialState());
+    expect(day.cells[cellKey(a.id, h(12, 55))]?.pos).toBe("front");
+    expect(day.cells[cellKey(a.id, h(13))]?.pos).toBe("bar");
+    expect(day.cells[cellKey(a.id, h(15))]?.pos).toBe("bar");
+  });
+
+  it("a custom spot is temporary: afterwards they go back to where they were", () => {
+    let day = team();
+    const a = day.shifts[0];
+    day = assignRange(day, S, a.id, h(11), h(13), "dungeon");
+    day = assignRange(day, S, a.id, h(13), h(14), "other", "Tournament");
+    day = refresh(day, initialState());
+    expect(day.cells[cellKey(a.id, h(13, 30))]?.pos).toBe("other");
+    expect(day.cells[cellKey(a.id, h(14, 5))]).toEqual({ pos: "dungeon", pinned: false });
+  });
+
+  it("someone who covers a break goes back to their own position afterwards", () => {
+    let day = team();
+    const [a, b] = day.shifts;
+    day = assignRange(day, S, a.id, h(11), h(12), "dungeon");
+    day = assignRange(day, S, b.id, h(11), h(12), "front");
+    day = placeBreak(day, a.id, h(11, 30), 20).day;
+    const brk = day.shifts[0].breaks[0];
+    day = assignCover(day, S, a.id, brk.id, b.id).day;
+    day = refresh(day, initialState());
+    expect(day.cells[cellKey(b.id, h(11, 35))]).toMatchObject({ pos: "dungeon", cover: brk.id });
+    expect(day.cells[cellKey(b.id, h(11, 50))]?.pos).toBe("front");
+    expect(day.cells[cellKey(b.id, h(13))]?.pos).toBe("front");
+  });
+
+  it("someone set to stay at a position is there without being assigned", () => {
+    let day = emptyDay("2026-11-17");
+    day = addShift(day, { name: "Stan", start: h(11), end: h(17), lock: "dungeon", floater: false });
+    day = refresh(day, initialState());
+    expect(day.cells[cellKey(day.shifts[0].id, h(12))]?.pos).toBe("dungeon");
+  });
+});
 
 describe("break rules (from the paper log)", () => {
   it("matches the break log table", () => {
@@ -47,13 +136,12 @@ describe("breaks are never recommended on the board", () => {
   it("adding people and re-dealing leaves every break unscheduled", () => {
     let day = emptyDay("2026-11-17");
     for (const n of ["A", "B", "C", "D", "E"]) day = addShift(day, { name: n, start: h(11), end: h(17), lock: null, floater: false });
-    day = refresh(day, initialState(), null);
-    day = refresh(day, initialState(), h(13));
+    day = refresh(day, initialState());
     for (const s of day.shifts) for (const b of s.breaks) expect(b.planned).toBeNull();
   });
 
   it("only shows a break once the lead places one", () => {
-    let day = refresh(addShift(emptyDay("2026-11-17"), { name: "A", start: h(11), end: h(17), lock: null, floater: false }), initialState(), null);
+    let day = refresh(addShift(emptyDay("2026-11-17"), { name: "A", start: h(11), end: h(17), lock: null, floater: false }), initialState());
     const a = day.shifts[0];
     expect(a.breaks[0].planned).toBeNull();
     day = placeBreak(day, a.id, h(14), 20).day;
@@ -90,35 +178,18 @@ describe("break planning", () => {
   });
 });
 
-describe("staffing limits (SOP: Front 1-2, Bar 2-3, Dungeon 1)", () => {
-  it("meets the SOP in every column that has enough people", () => {
-    const day = typicalDay();
-    for (const c of cellsFor(day.shifts, S)) {
-      const by = staffAt(day, S, c);
-      const onFloor = by.front.length + by.bar.length + by.dungeon.length;
-      if (onFloor < 4) continue;
-      expect(by.dungeon.length).toBeLessThanOrEqual(1);
-      expect(by.bar.length).toBeGreaterThanOrEqual(2);
-      expect(by.bar.length).toBeLessThanOrEqual(3);
-      expect(by.front.length).toBeGreaterThanOrEqual(1);
-      expect(by.front.length).toBeLessThanOrEqual(2);
-    }
-  });
-
-  it("covers Dungeon with exactly one person whenever 4+ are on", () => {
+describe("staffing follows what was assigned", () => {
+  it("counts exactly the people the lead put on each position", () => {
     const day = quietDay();
-    const c = h(13, 30); // three openers plus the floater
-    expect(staffAt(day, S, c).dungeon).toHaveLength(1);
+    const by = staffAt(day, S, h(14)); // Alex Front, Bri + Flo Bar, Cam Dungeon
+    expect(by.front.map((x) => x.name)).toEqual(["Alex"]);
+    expect(by.bar.map((x) => x.name).sort()).toEqual(["Bri", "Flo"]);
+    expect(by.dungeon.map((x) => x.name)).toEqual(["Cam"]);
   });
 
-  it("does not park anyone at one position (Bar needs more seats, so allow a skew)", () => {
-    const day = typicalDay();
-    const mins = positionMinutes(day, S);
-    for (const s of day.shifts.filter((x) => !x.role && x.end - x.start >= 6 * 60)) {
-      const vals = Object.values(mins[s.id]);
-      const total = vals.reduce((a, b) => a + b, 0);
-      expect(Math.max(...vals) / total).toBeLessThanOrEqual(0.75);
-    }
+  it("shows a position as short until somebody is assigned to it", () => {
+    const day = quietDay();
+    expect(staffAt(day, S, h(11, 30)).bar.map((x) => x.name)).toEqual(["Bri"]); // Flo is not in yet
   });
 });
 
@@ -130,14 +201,6 @@ describe("freeform painting", () => {
     const again = autoFill(day, S);
     expect(again[cellKey(alex.id, h(12))]).toEqual({ pos: "dungeon", pinned: true });
     expect(again[cellKey(alex.id, h(12, 30))]).toEqual({ pos: "dungeon", pinned: true });
-  });
-
-  it("does not rewrite earlier columns when re-dealing from the current time", () => {
-    const day = typicalDay();
-    const redeal = autoFill(day, S, h(14, 20));
-    for (const [k, v] of Object.entries(day.cells)) {
-      if (Number(k.split("@")[1]) < h(14, 20)) expect(redeal[k]).toEqual(v);
-    }
   });
 
   it("paints a break onto the board and erases it again", () => {
@@ -189,7 +252,7 @@ describe("break cover", () => {
       expect(staffAt(day, S, c)[pos].length).toBeGreaterThanOrEqual(1);
       // reset for the next person
       day = eraseCells(day, S, who.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
-      day = { ...day, cells: autoFill(day, S, Infinity) };
+      day = { ...day, cells: autoFill(day, S) };
     }
   });
 
@@ -197,7 +260,9 @@ describe("break cover", () => {
     let day = emptyDay("2026-11-17");
     for (const n of ["A", "B", "C", "D"]) day = addShift(day, { name: n, start: h(11), end: h(17), lock: null, floater: false });
     day = addShift(day, { name: "Flo", start: h(11), end: h(17), lock: null, floater: true });
-    day = refresh(day, initialState(), null);
+    const spots: Position[] = ["front", "bar", "bar", "dungeon", "bar"];
+    day.shifts.forEach((s, i) => (day = assignRange(day, S, s.id, s.start, s.end, spots[i])));
+    day = refresh(day, initialState());
     const a = day.shifts[0];
     const placed = placeBreak(day, a.id, h(13), 20);
     const res = assignCover(placed.day, S, a.id, placed.breakId!);
@@ -208,7 +273,9 @@ describe("break cover", () => {
     // two people on Front and Bar: a break empties a position and the other person cannot move
     let day = emptyDay("2026-11-17");
     for (const n of ["A", "B"]) day = addShift(day, { name: n, start: h(11), end: h(17), lock: null, floater: false });
-    day = refresh(day, initialState(), null);
+    day = assignRange(day, S, day.shifts[0].id, h(11), h(17), "front");
+    day = assignRange(day, S, day.shifts[1].id, h(11), h(17), "bar");
+    day = refresh(day, initialState());
     const a = day.shifts[0];
     const placed = placeBreak(day, a.id, h(13), 20);
     const res = assignCover(placed.day, S, a.id, placed.breakId!);
@@ -231,8 +298,8 @@ describe("no automatic cover", () => {
     const c = h(14);
     const holder = day.shifts.find((s) => !s.role && day.cells[cellKey(s.id, c)]?.pos === "dungeon" && s.start <= c && c < s.end)!;
     const placed = placeBreak(day, holder.id, c, 20);
-    // deal the whole day again with the break in place
-    const redealt = { ...placed.day, cells: autoFill({ ...placed.day, cells: {} }, S) };
+    // rebuild the board with the break in place
+    const redealt = { ...placed.day, cells: autoFill(placed.day, S) };
     const at = (t: number) => staffAt(redealt, S, t);
     // the holder is on break, nobody was sent to cover: the position is open until the lead picks someone
     const during = at(h(14, 5));
@@ -258,7 +325,7 @@ describe("sending someone on break with the cover you picked", () => {
 
     // the same steps the Assign dialog and the break timer run
     let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, c, 20), picked.shift.id);
-    next = { ...next, cells: autoFill(next, S, Infinity) }; // the "fill" pass that follows in the app
+    next = { ...next, cells: autoFill(next, S) }; // the pass that follows in the app
 
     for (const t of [h(14), h(14, 10), h(14, 15)]) {
       expect(next.cells[cellKey(picked.shift.id, t)]).toMatchObject({ pos: "dungeon", pinned: true });
@@ -376,7 +443,7 @@ describe("custom assignment", () => {
   it("takes someone off the rotation and shows the typed name", () => {
     let day = typicalDay();
     day = addShift(day, { name: "Quinn", start: h(11), end: h(17), lock: null, floater: false, role: "custom", roleLabel: "  Events " });
-    day = refresh(day, initialState(), null);
+    day = refresh(day, initialState());
     const quinn = day.shifts.find((s) => s.name === "Quinn")!;
     expect(roleName(quinn)).toBe("Events");
     expect(Object.keys(day.cells).some((k) => k.startsWith(`${quinn.id}@`))).toBe(false);

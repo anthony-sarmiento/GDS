@@ -12,8 +12,10 @@ import {
   breakSpan,
   cellsFor,
   coverageRuns,
+  hasPositionAt,
   isPresent,
   liveFloor,
+  needsPosition,
   positionMinutes,
   positionRuns,
   rotating,
@@ -67,7 +69,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         <p>
           {leads.length
             ? "Only leads are on today. Leads are not on the rotation, so add the retail team."
-            : "Add today's team and GDS will build the rotation and break plan."}
+            : "Add today's team, then assign each person a starting position from the Board."}
         </p>
         <button className="btn primary" onClick={goTeam}>
           Add team
@@ -83,29 +85,10 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       <div className="section-title">
         <h2>Board</h2>
-        <p>Tap Assign to send someone somewhere at a time, or tap a row. Brushes paint exact ranges by hand.</p>
+        <p>Assign each person a starting position, then move them whenever you need to. They stay put until you do.</p>
         <span className="spacer" />
         <button className="btn primary" onClick={() => setAssignFor({})}>
           Assign
-        </button>
-        <button
-          className="btn"
-          onClick={() => {
-            const from = now ?? -Infinity;
-            mutate(
-              (d) => ({
-                ...d,
-                // keep hand-painted blocks and cover blocks; drop the rest from now on so it is dealt again
-                cells: Object.fromEntries(
-                  Object.entries(d.cells).filter(([k, c]) => c.pinned || Number(k.split("@")[1]) < from),
-                ),
-              }),
-              { auto: "cells" },
-            );
-            ctx.flash(now != null ? "Re-dealt the rest of the day" : "Board re-dealt");
-          }}
-        >
-          {now != null ? "Auto-deal from now" : "Auto-deal"}
         </button>
         <button
           className="btn ghost"
@@ -113,18 +96,15 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
             mutate(
               (d) => ({
                 ...d,
-                cells: Object.fromEntries(
-                  Object.entries(d.cells)
-                    .filter(([, c]) => !c.cover)
-                    .map(([k, c]) => [k, { ...c, pinned: false }]),
-                ),
+                // breaks keep their cover blocks; every other assignment goes
+                cells: Object.fromEntries(Object.entries(d.cells).filter(([, c]) => c.cover)),
               }),
-              { auto: "cells" },
+              { auto: true },
             );
-            ctx.flash("Cleared all hand-painted blocks and re-dealt");
+            ctx.flash("Cleared every assignment");
           }}
         >
-          Clear painted
+          Clear assignments
         </button>
       </div>
 
@@ -161,19 +141,34 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
   const t = now!;
   const floor = liveFloor(day, settings, t);
   const onShift = rotating(day.shifts).filter((s) => s.start <= t && t < s.end);
-  const nextBlock =
-    settings.anchor + (Math.floor((t - settings.anchor) / settings.rotationMinutes) + 1) * settings.rotationMinutes;
-  const lastEnd = Math.max(...rotating(day.shifts).map((s) => s.end));
+  // people working now, or starting within a few hours, who have not been given a position yet
+  const unassigned = rotating(day.shifts)
+    .filter((s) => s.sentHomeAt == null && t < s.end && s.start <= t + 240)
+    .filter((s) => !hasPositionAt(day, settings, s, Math.max(s.start, t)));
 
   return (
     <div className="section">
       <div className="section-title" style={{ marginTop: 0 }}>
         <h2>Right now</h2>
-        <p>
-          {fmt(t)}
-          {nextBlock < lastEnd && ` · next auto-rotation block at ${fmt(nextBlock)} (${fmtDuration(nextBlock - t)})`}
-        </p>
+        <p>{fmt(t)}</p>
       </div>
+      {unassigned.length > 0 && (
+        <div className="card needs-pos">
+          <strong>Needs a position</strong>
+          <span className="muted">Nobody is placed until you assign them.</span>
+          <div className="needs-list">
+            {unassigned.map((s) => (
+              <span className="needs-person" key={s.id}>
+                {s.name}
+                <small>{s.start > t ? `in at ${fmtShort(s.start)}` : "here now"}</small>
+                <button className="btn small primary" onClick={() => onAssign(s.id)}>
+                  Assign
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {onShift.length === 0 && <div className="card muted">Nobody is clocked in at this time.</div>}
       {onShift.length > 0 && floor.elsewhere.length > 0 && (
         <div className="card elsewhere">
@@ -206,7 +201,7 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {s.name}
                     {s.floater && <span className="badge">Floater</span>}
                     {s.lock && <span className="badge">Stays</span>}
-                    <small>until {fmtShort(Math.min(s.end, nextBlock))}</small>
+                    <small>out {fmtShort(s.end)}</small>
                     <button className="btn ghost small" title={`Assign ${s.name} somewhere`} onClick={() => onAssign(s.id)}>
                       Assign
                     </button>
@@ -307,7 +302,7 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
                   className="btn primary small"
                   onClick={() =>
                     mutate((d) => applyBreakChange(d, settings, (dd) => ({ day: endBreak(dd, s.id, b.id, t), breakId: b.id })), {
-                      auto: "fill",
+                      auto: true,
                     })
                   }
                 >
@@ -459,12 +454,12 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
         });
         const sp = hit ? breakSpan(hit) : null;
         const targets = moved ? cellsIn(lo, hi) : sp ? cellsIn(sp[0], sp[1]) : run ? cellsIn(run.start, run.end) : [];
-        if (targets.length) c.mutate((dd) => eraseCells(dd, c.settings, shift.id, targets), { auto: "fill" });
+        if (targets.length) c.mutate((dd) => eraseCells(dd, c.settings, shift.id, targets), { auto: true });
       } else {
         const targets = moved ? cellsIn(lo, hi) : run ? cellsIn(run.start, run.end) : [];
         if (targets.length) {
           const name = b === "other" ? label.trim() : "";
-          c.mutate((dd) => paintCells(dd, shift.id, targets, b, name), { auto: "fill" });
+          c.mutate((dd) => paintCells(dd, shift.id, targets, b, name), { auto: true });
           if (name) {
             setRecent((cur) => {
               const next = pushLabel(cur, name);
@@ -692,6 +687,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {fmtShort(s.start)}–{fmtShort(s.end)}
                     {s.floater ? " · floater" : ""}
                     {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
+                    {needsPosition(day, settings, s) ? " · needs a position" : ""}
                     {s.sentHomeAt != null ? ` · sent home${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
                   </small>
                 </div>

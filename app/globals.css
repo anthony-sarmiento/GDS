@@ -2464,3 +2464,40 @@ button,
     font-size: 1.8rem;
   }
 }
+
+/* ---------- people who still need a position ---------- */
+.needs-pos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+  border-color: rgba(255, 194, 71, 0.55);
+  background: rgba(255, 194, 71, 0.07);
+}
+
+.needs-pos strong {
+  color: var(--warn);
+}
+
+.needs-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-basis: 100%;
+}
+
+.needs-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--navy-700);
+  border-radius: 8px;
+  padding: 5px 6px 5px 12px;
+  font-weight: 600;
+}
+
+.needs-person small {
+  color: var(--muted);
+  font-weight: 500;
+}

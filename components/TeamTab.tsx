@@ -10,10 +10,10 @@ import { fmt, fmtDuration, fmtHours, fromInput, hoursOf, normalizeEnd, toInput }
 const PRESETS: { label: string; start?: string; end?: string; floater?: boolean; assign?: string }[] = [
   { label: "Opening Lead 10–5:15", start: "10:00", end: "17:15", assign: "lead:opening" },
   { label: "Opener 11–5", start: "11:00", end: "17:00", assign: "" },
-  { label: "Closer 5–11", start: "17:00", end: "23:00", assign: "" },
-  { label: "Closer 5–12", start: "17:00", end: "00:00", assign: "" },
+  { label: "Closer 5–11:15", start: "17:00", end: "23:15", assign: "" },
+  { label: "Closer 5–11:45", start: "17:00", end: "23:45", assign: "" },
   { label: "Floater 1–9", start: "13:00", end: "21:00", floater: true, assign: "" },
-  { label: "Closing Lead", start: "17:00", end: "23:00", assign: "lead:closing" },
+  { label: "Closing Lead 5–11:45", start: "17:00", end: "23:45", assign: "lead:closing" },
   { label: "Inventory Lead", assign: "lead:inventory" },
 ];
 
@@ -27,7 +27,7 @@ const assignOf = (s: Pick<Shift, "lock" | "role">) => (s.role ? `lead:${s.role}`
 function AssignOptions({ keepCustom = false }: { keepCustom?: boolean }) {
   return (
     <>
-      <option value="">Rotates</option>
+      <option value="">On the board</option>
       {POSITIONS.map((p) => (
         <option key={p} value={p}>
           Stays at {POSITION_LABEL[p]}
@@ -44,8 +44,6 @@ function AssignOptions({ keepCustom = false }: { keepCustom?: boolean }) {
     </>
   );
 }
-
-const ROTATION_CHOICES = [30, 60, 90, 120];
 
 function breakSummary(start: number, end: number) {
   const lens = requiredBreaks(hoursOf(start, end));
@@ -97,7 +95,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
         <div className="section-title" style={{ marginTop: 0 }}>
           <h2>Add to today&rsquo;s team</h2>
           <p>
-            Type a name and the hours. Positions are not set here: push assignments from the Board at the time they happen.
+            Type a name and the hours. Nobody is given a position automatically: assign each person's starting position from the Board before they arrive.
           </p>
         </div>
 
@@ -161,7 +159,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
 
       <div className="section-title">
         <h2>Today&rsquo;s team</h2>
-        <p>Edit anything inline. Changes re-plan the rest of the day.</p>
+        <p>Edit anything inline.</p>
         <span className="spacer" />
         {!day.shifts.length && previous && (
           <button
@@ -293,20 +291,6 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
       </div>
       <div className="card settings-grid">
         <label className="lbl">
-          Auto-rotate every
-          <select
-            className="field"
-            value={settings.rotationMinutes}
-            onChange={(e) => setSettings({ rotationMinutes: Number(e.target.value) })}
-          >
-            {ROTATION_CHOICES.map((m) => (
-              <option key={m} value={m}>
-                {m} minutes
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="lbl">
           Board starts at
           <input
             type="time"
@@ -336,7 +320,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
 
       <div className="section-title">
         <h2>Staffing</h2>
-        <p>How many people belong on each position. Auto-deal follows this, and the board flags anything short.</p>
+        <p>How many people belong on each position. The board flags anything short or over.</p>
       </div>
       <div className="card settings-grid">
         {POSITIONS.map((p) => (

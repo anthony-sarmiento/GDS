@@ -366,7 +366,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
               now != null &&
               mutate(
                 (d) => applyBreakChange(d, settings, (dd) => ({ day: endBreak(dd, shift.id, brk.id, now), breakId: brk.id })),
-                { auto: "fill" },
+                { auto: true },
               )
             }
           >
@@ -378,7 +378,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
             onClick={() =>
               mutate(
                 (d) => applyBreakChange(d, settings, (dd) => ({ day: resetBreak(dd, shift.id, brk.id), breakId: brk.id })),
-                { auto: "fill" },
+                { auto: true },
               )
             }
           >
@@ -402,7 +402,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
             onClick={() =>
               mutate(
                 (d) => applyBreakChange(d, settings, (dd) => ({ day: resetBreak(dd, shift.id, brk.id), breakId: brk.id })),
-                { auto: "fill" },
+                { auto: true },
               )
             }
           >
@@ -415,7 +415,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
           title="Remove this break"
           onClick={() =>
             mutate((d) => applyBreakChange(d, settings, (dd) => ({ day: removeBreak(dd, shift.id, brk.id), breakId: brk.id })), {
-              auto: "fill",
+              auto: true,
             })
           }
         >
