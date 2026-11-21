@@ -26,13 +26,12 @@ export interface Ctx {
   live: boolean;
   /**
    * Apply a change to the viewed day.
-   * `auto: true` re-deals unpinned columns (and places unplaced breaks) afterwards;
-   * `auto: "cells"` re-deals columns but leaves break times alone;
-   * `auto: "fill"` only fills columns that have no position yet.
+   * `auto: true` re-derives the board afterwards: each person stays where the lead last sent them.
+   * Nobody is given a position by GDS itself.
    */
   mutate: (
     fn: (day: DayState) => DayState,
-    opts?: { auto?: boolean | "cells" | "fill"; /** false = not an undo step (automatic housekeeping) */ record?: boolean },
+    opts?: { auto?: boolean; /** false = not an undo step (automatic housekeeping) */ record?: boolean },
   ) => void;
   setSettings: (patch: Partial<Settings>) => void;
   /** Remember a typed name for autocomplete. */

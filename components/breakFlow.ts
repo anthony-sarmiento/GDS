@@ -30,7 +30,7 @@ export function runBreakChange(
   const span = breakSpan(brk);
 
   const apply = (choice?: string | null) => {
-    ctx.mutate((d) => applyBreakChange(d, settings, build, choice), { auto: "fill" });
+    ctx.mutate((d) => applyBreakChange(d, settings, build, choice), { auto: true });
     const res = assignCover(probe.day, settings, owner.id, probe.breakId!, choice);
     if (res.status === "covered" && res.cover && res.position && span) {
       ctx.flash(`${res.cover.name} covers ${POSITION_LABEL[res.position]} ${fmt(span[0])}–${fmt(span[1])}`);

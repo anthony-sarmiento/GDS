@@ -42,13 +42,18 @@ export function loadState(): AppState {
     const parsed = JSON.parse(raw) as Partial<AppState>;
     const oldGrid = parsed.settings?.gridMinutes !== DEFAULT_SETTINGS.gridMinutes;
     const days = parsed.days ?? {};
+    const settings = mergeSettings(parsed.settings);
     return {
-      settings: mergeSettings(parsed.settings),
+      settings,
       names: parsed.names ?? [],
-      // columns saved at an older step size do not line up, so deal those days again
-      days: oldGrid
-        ? Object.fromEntries(Object.entries(days).map(([d, v]) => [d, { ...v, cells: {} }]))
-        : days,
+      // Columns saved at an older step size do not line up, so those are dropped. Every day is then
+      // rebuilt from what the lead assigned: positions an older version dealt out by itself go away.
+      days: Object.fromEntries(
+        Object.entries(days).map(([d, v]) => {
+          const day = oldGrid ? { ...v, cells: {} } : v;
+          return [d, { ...day, cells: autoFill(day, settings) }];
+        }),
+      ),
     };
   } catch {
     return initialState();
@@ -64,19 +69,11 @@ export function saveState(state: AppState) {
 }
 
 /**
- * Re-run the automatic parts after a change. GDS never recommends or places breaks: they appear on
- * the board only when the lead puts them there (Assign, the Break brush, or Start).
- * - "redeal" / "cells": re-deal unpinned columns (from `now` onward on a live day).
- * - "fill": leave everything as it is and only fill columns that have no position yet.
+ * Re-derive the board after a change. GDS never picks positions or breaks for anyone: they appear
+ * only when the lead assigns them. This just carries each person's last assignment forward.
  */
-export function refresh(
-  day: DayState,
-  state: AppState,
-  now: number | null,
-  mode: "redeal" | "cells" | "fill" = "redeal",
-): DayState {
-  if (mode === "fill") return { ...day, cells: autoFill(day, state.settings, Infinity) };
-  return { ...day, cells: autoFill(day, state.settings, now ?? -Infinity) };
+export function refresh(day: DayState, state: AppState): DayState {
+  return { ...day, cells: autoFill(day, state.settings) };
 }
 
 export function addShift(
@@ -228,7 +225,7 @@ export function paintCells(
 
 /**
  * Push an assignment: send someone to a position (or a named custom spot) from one time until another.
- * The columns are pinned, so auto-deal leaves them alone; the rest of their day is untouched.
+ * The columns are pinned. After `until` the person stays where they were sent, unless something else is assigned.
  */
 export function assignRange(
   day: DayState,

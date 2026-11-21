@@ -1,6 +1,6 @@
 # GDS — Geek'd Deployment System
 
-Rotation and break tracking for the retail floor at GEEK'D Orlando. Inspired by Disney's CDS: add today's team, and GDS deals out Front / Bar / Dungeon blocks and plans everyone's breaks.
+Rotation and break tracking for the retail floor at GEEK'D Orlando. Inspired by Disney's CDS: add today's team, then the lead assigns each person a position and sends them on breaks. GDS never picks positions or breaks by itself.
 
 No login, no database. Everything is saved in the browser (`localStorage`) on the device you use.
 
@@ -19,9 +19,10 @@ Push to GitHub, then import the repo in Vercel. It is a stock Next.js app; no en
 
 ## How it works
 
-- **Team tab** – add people with clock in/out. Quick-fill buttons: Opening Lead 10–5:15, Opener 11–5, Closer 5–11, Closer 5–12, Floater 1–9, Closing Lead, Inventory Lead. *Works as* is Rotates, Stays at a position all day, or a lead role. **Positions are not set here**: assignments get pushed from the Board at the time they happen. **Leads are not on the board**: they have a role (Opening / Closing / Inventory Lead) and show up on the break log and break timer only.
+- **Team tab** – add people with clock in/out. Quick-fill buttons: Opening Lead 10–5:15, Opener 11–5, Closer 5–11:15, Closer 5–11:45, Floater 1–9, Closing Lead, Inventory Lead. *Works as* is On the board, Stays at a position all day, or a lead role. **Nobody gets a position when they are added.** The lead assigns each person's starting position from the Board before they arrive, and moves them from there. **Leads are not on the board**: they have a role (Opening / Closing / Inventory Lead) and show up on the break log and break timer only.
 - **Board tab** (CDS style, minute precision)
-  - **Assign**: send someone somewhere at a time. Open it from the Assign button, a person's Assign button in Right now, their name, or by tapping a row at the time you want. Pick who, where (Front, Bar, Dungeon, a **Custom** name you type like Tournament, or **Break**), from when and until when (30 min / 1 hr / 2 hr / rest of shift, or exact times). It shows what the move does to the position they leave and the one they join, and offers a cover. Only that stretch changes.
+  - **Needs a position**: anyone working now, or arriving within four hours, who has no position yet shows in an amber card with an Assign button. Their row on the timeline says "needs a position".
+  - **Assign**: send someone somewhere at a time. Open it from the Assign button, a person's Assign button in Right now, their name, or by tapping a row at the time you want. Pick who, where (Front, Bar, Dungeon, a **Custom** name you type like Tournament, or **Break**), from when and until when (30 min / 1 hr / 2 hr / rest of shift, or exact times). A position is held until you move the person, so the default is the rest of the shift. A custom spot or a cover block is temporary: afterwards they go back to where they were. It shows what the move does to the position they leave and the one they join, and offers a cover. Only that stretch changes.
   - *Right now*: who is on Front / Bar / Dungeon, who is on break, who is short, and who could move to cover. Each person has a **Bump** button.
   - *Break timer*: Start / End stamps real break times.
   - *Board*: a continuous timeline, one row per person, snapping to 5 minutes. Pick a **brush** (keys `1` Front, `2` Bar, `3` Dungeon, `4` Break, `0` Erase, `Esc` to put it down) and **drag across a row for an exact range**. A plain click repaints the whole block under the cursor. Neighbouring blocks on the same position merge into one. Painted ranges are pinned (thin underline) and never move on their own. Zoom with − / +.
@@ -46,7 +47,7 @@ When you press **Start** on a break, place one with the Break brush, or send som
 
 ### Staffing
 
-Front 1–2, Bar 2–3, Dungeon exactly 1 by default (editable in Team → Staffing). Auto-deal fills the minimums first (Front and Bar, then Dungeon) and sends spare people to the Bar.
+Front 1–2, Bar 2–3, Dungeon exactly 1 by default (editable in Team → Staffing). The board flags a position that is short, empty or over the maximum. It never moves anyone to fix it.
 
 ### Break rules (from the paper log)
 
@@ -62,7 +63,7 @@ Break length is editable per break, and breaks can be added or removed. Rules li
 ### Engine notes
 
 - `lib/breaks.ts` – break rules (how many, how long). It also contains a break-time planner that is no longer used by the app, since breaks are scheduled by hand.
-- `lib/rotation.ts` – the board solver. Per 5-minute column it picks positions that meet the staffing limits, rotate at block boundaries (default hourly), stay put in between, and favor positions someone has spent the least time at. Painted columns are never touched.
+- `lib/rotation.ts` – builds the board from what the lead assigned. Assigned and painted columns are kept; a column with nothing assigned inherits the person's last position (cover blocks and custom spots do not count), and before a person's first assignment it stays empty. There is no auto-dealing.
 - `lib/cover.ts` – the cover rule for breaks.
 - `lib/store.ts` – state helpers: painting, break placement, bump out.
-- "Board starts at" (default 10:00 AM) anchors the columns and rotation blocks.
+- "Board starts at" (default 10:00 AM) anchors the board columns.

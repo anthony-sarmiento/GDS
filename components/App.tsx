@@ -15,7 +15,6 @@ import {
 } from "@/lib/time";
 import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
 import { breakStatus } from "@/lib/breaks";
-import { cellKey, cellsFor, isPresent, rotating } from "@/lib/rotation";
 import { Ctx, CoverPrompt } from "./ctx";
 import { emptyHistory, History, recordChange, stepBack, stepForward } from "@/lib/history";
 import CoverDialog from "./CoverDialog";
@@ -63,8 +62,6 @@ export default function App() {
   const day: DayState = state.days[date] ?? emptyDay(date);
   const live = date === operatingDate(clock);
   const now = preview ?? (live ? operatingMinutes(clock) : null);
-  const nowRef = useRef<number | null>(now);
-  nowRef.current = now;
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -89,7 +86,7 @@ export default function App() {
       setState((prev) => {
         const base = prev.days[date] ?? emptyDay(date);
         let next = fn(base);
-        if (opts?.auto) next = refresh(next, prev, nowRef.current, opts.auto === "fill" ? "fill" : opts.auto === "cells" ? "cells" : "redeal");
+        if (opts?.auto) next = refresh(next, prev);
         return { ...prev, days: { ...prev.days, [date]: next } };
       });
     },
@@ -106,10 +103,8 @@ export default function App() {
         const next: AppState = { ...prev, settings };
         let day = base;
         if (gridChanged) {
-          // old column keys no longer line up, so deal the viewed day again from scratch
-          day = refresh({ ...base, cells: {} }, next, nowRef.current);
-        } else if (patch.rotationMinutes !== undefined || patch.limits !== undefined) {
-          day = refresh(base, next, nowRef.current);
+          // old column keys no longer line up, so start the viewed day's board again
+          day = refresh({ ...base, cells: {} }, next);
         }
         return { ...next, days: { ...prev.days, [date]: day } };
       });
@@ -120,17 +115,6 @@ export default function App() {
   const remember = useCallback((name: string) => {
     setState((prev) => ({ ...prev, names: rememberName(prev.names, name) }));
   }, []);
-
-  // A day opened later (or after changing block length) may have blocks with no position yet.
-  useEffect(() => {
-    if (!hydrated || !day.shifts.length) return;
-    const g = state.settings.gridMinutes;
-    const gaps = cellsFor(day.shifts, state.settings).some((c) =>
-      rotating(day.shifts).some((s) => isPresent(s, c, g) && !day.cells[cellKey(s.id, c)]),
-    );
-    if (gaps) mutate((d) => d, { auto: true, record: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, date, day.shifts.length]);
 
   const undo = useCallback(() => {
     const current = stateRef.current.days[date] ?? emptyDay(date);

@@ -55,14 +55,21 @@ export default function AssignDialog({
   // the break log decides the default: the first break this person still owes (20, or 30 for the long kind)
   const breakLen = (p: typeof person) =>
     (p?.breaks.find((b) => b.start == null && b.planned == null) ?? p?.breaks.find((b) => b.start == null))?.length ?? 20;
-  const blockEnd = (t: number) => {
-    const rot = settings.rotationMinutes;
-    const end = settings.anchor + (Math.floor((t - settings.anchor) / rot) + 1) * rot;
-    return end - t < 15 ? end + rot : end;
+  // a position is held until the lead moves the person, so the default is the rest of the shift
+  // (a custom spot like a tournament is usually shorter, so that one defaults to an hour)
+  const defaultEnd = (p: NonNullable<typeof person>, f: number, w: Where) =>
+    Math.min(w === "other" ? f + 60 : w === "break" ? f + breakLen(p) : p.end, p.end);
+  // Someone with nothing assigned yet starts from where their shift starts (or the first gap), so a
+  // starting position covers the time they have been here too. Otherwise it starts now.
+  const firstOpen = (p: NonNullable<typeof person>): number | null => {
+    const c = cellsFor(day.shifts, settings).find((x) => isPresent(p, x, g) && !day.cells[cellKey(p.id, x)]);
+    return c == null ? null : Math.max(c, p.start);
   };
-  const startGuess = round5(Math.min(Math.max(at ?? now ?? person?.start ?? 0, person?.start ?? 0), (person?.end ?? 0) - g));
+  const startFor = (p: NonNullable<typeof person>) =>
+    round5(Math.min(Math.max(at ?? firstOpen(p) ?? now ?? p.start, p.start), p.end - g));
+  const startGuess = person ? startFor(person) : 0;
   const [from, setFrom] = useState(startGuess);
-  const [until, setUntil] = useState(Math.min(blockEnd(startGuess), person?.end ?? startGuess + 60));
+  const [until, setUntil] = useState(person ? defaultEnd(person, startGuess, "front") : startGuess + 60);
   // undefined = nothing picked yet, null = Nobody, otherwise the shift id of who rotates over
   const [coverChoice, setCoverChoice] = useState<string | null | undefined>(undefined);
   useEffect(() => setCoverChoice(undefined), [who, where, from, until]);
@@ -133,9 +140,9 @@ export default function AssignDialog({
     setWho(id);
     const p = crew.find((s) => s.id === id);
     if (!p) return;
-    const f = round5(Math.min(Math.max(from, p.start), p.end - g));
+    const f = at != null ? round5(Math.min(Math.max(from, p.start), p.end - g)) : startFor(p);
     setFrom(f);
-    setUntil(Math.min(isBreak ? f + breakLen(p) : blockEnd(f), p.end));
+    setUntil(defaultEnd(p, f, where));
   }
 
   function changeFrom(v: number) {
@@ -146,8 +153,8 @@ export default function AssignDialog({
 
   function changeWhere(w: Where) {
     setWhere(w);
-    if (w === "break") setUntil(Math.min(from + breakLen(person), person!.end));
-    else if (isBreak) setUntil(Math.min(blockEnd(from), person!.end));
+    // keep a length you set yourself; only reset when switching between kinds of assignment
+    if (w === "break" || isBreak || w === "other" || where === "other") setUntil(defaultEnd(person!, from, w));
   }
 
   function confirm() {
@@ -158,7 +165,7 @@ export default function AssignDialog({
     if (isBreak) {
       mutate(
         (d) => applyBreakChange(d, settings, (dd) => placeBreak(dd, person.id, from, until - from), effective ?? null),
-        { auto: "fill" },
+        { auto: true },
       );
       flash(
         `${person.name} on break ${fmt(from)}–${fmt(until)}${chosen && position ? ` · ${chosen.name} covers ${POSITION_LABEL[position]}` : ""}`,
@@ -173,7 +180,7 @@ export default function AssignDialog({
         if (chosen && position) next = assignRange(next, settings, chosen.id, from, until, position);
         return next;
       },
-      { auto: "fill" },
+      { auto: true },
     );
     if (where === "other" && name) {
       const next = pushLabel(recent, name);
@@ -314,8 +321,9 @@ export default function AssignDialog({
           <div className="chip-row">
             {durations.map((d, i) => {
               const end = Math.min(d.end, person.end);
-              // only the first chip that lands on the chosen time lights up
-              const active = until === end && durations.findIndex((x) => Math.min(x.end, person.end) === end) === i;
+              // only one chip lights up: "Rest of shift" when that is the chosen time, else the first that matches
+              const toEnd = until === person.end;
+              const active = d.label === "Rest of shift" ? toEnd : !toEnd && until === end && durations.findIndex((x) => Math.min(x.end, person.end) === end) === i;
               return (
                 <button key={d.label} type="button" className="btn small" aria-pressed={active} onClick={() => setUntil(end)}>
                   {d.label}
@@ -355,7 +363,10 @@ export default function AssignDialog({
               {POSITION_LABEL[where as Position]} would have {impact.joined} (max {settings.limits[where as Position].max}).
             </div>
           )}
-          {valid && where === "other" && <div className="note">Custom spots are not counted as Front, Bar or Dungeon.</div>}
+          {valid && where === "other" && <div className="note">Custom spots are not counted as Front, Bar or Dungeon. After it they go back to where they were.</div>}
+          {valid && !isBreak && where !== "other" && until < person.end && (
+            <div className="note">After {fmt(until)} {person.name} stays on {POSITION_LABEL[where as Position]} unless you assign something else later.</div>
+          )}
         </div>
 
         {showPicker && impact && position && (
