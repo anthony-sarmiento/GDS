@@ -63,3 +63,24 @@ describe("rotation chains", () => {
     expect(at(day, "Dee", h(15))?.pos).toBe("front");
   });
 });
+
+describe("times in a chain", () => {
+  it("lets each person start and stop at their own time", () => {
+    const d0 = setUp();
+    const end = find(d0, "Anna").end;
+    const day = applyChain(d0, S, h(14), [
+      { shiftId: find(d0, "Dee").id, dest: "front", until: end },
+      { shiftId: find(d0, "Anna").id, dest: "bar", from: h(14, 10), until: h(15) },
+      { shiftId: find(d0, "Ben").id, dest: "break", from: h(14, 30), until: h(15) },
+    ]);
+    // Anna keeps the Front until 2:10, then goes to the Bar until 3:00
+    expect(at(day, "Anna", h(14, 5))?.pos).toBe("front");
+    expect(at(day, "Anna", h(14, 30))?.pos).toBe("bar");
+    expect(at(day, "Anna", h(14, 55))).toMatchObject({ pos: "bar", ends: true });
+    // Ben's break is 30 minutes starting at 2:30
+    const ben = find(day, "Ben");
+    const placed = ben.breaks.find((b) => b.planned != null)!;
+    expect(placed.planned).toBe(h(14, 30));
+    expect(placed.length).toBe(30);
+  });
+});

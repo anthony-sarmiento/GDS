@@ -11,7 +11,9 @@ export interface ChainMove {
   dest: ChainDest;
   /** Name for a custom spot. */
   label?: string;
-  /** When the move ends (a break ends this long after it starts; ignored for a bumpout). */
+  /** When this move starts. Defaults to the time of the whole chain. */
+  from?: number;
+  /** When the move ends (the end of a break; ignored for a bumpout). */
   until: number;
 }
 
@@ -47,9 +49,10 @@ export function applyChain(input: DayState, settings: Settings, from: number, mo
     const shift = day.shifts.find((s) => s.id === m.shiftId);
     if (!shift) return;
     const prev = i > 0 ? moves[i - 1] : null;
+    const t = m.from ?? from;
 
     if (m.dest === "bumpout") {
-      day = bumpOut(day, settings, shift.id, null, from);
+      day = bumpOut(day, settings, shift.id, null, t);
       const taker = prev ? day.shifts.find((s) => s.id === prev.shiftId) : undefined;
       if (taker) day = { ...day, shifts: day.shifts.map((s) => (s.id === shift.id ? { ...s, bumpedBy: taker.name } : s)) };
       return;
@@ -61,7 +64,7 @@ export function applyChain(input: DayState, settings: Settings, from: number, mo
         day,
         settings,
         (d) => {
-          const r = placeBreak(d, shift.id, from, Math.max(5, m.until - from));
+          const r = placeBreak(d, shift.id, t, Math.max(5, m.until - t));
           placedId = r.breakId;
           return r;
         },
@@ -83,7 +86,7 @@ export function applyChain(input: DayState, settings: Settings, from: number, mo
       return;
     }
 
-    day = assignRange(day, settings, shift.id, from, m.until, m.dest, m.label);
+    day = assignRange(day, settings, shift.id, t, m.until, m.dest, m.label);
   });
   return day;
 }

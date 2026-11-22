@@ -22,8 +22,10 @@ type ChainWhere = Position | "break" | "bumpout";
 interface ChainStep {
   who: string;
   where: ChainWhere | "";
-  /** "end" = until their bumpout; a number = minutes (the break length for a break). */
-  end: "end" | number;
+  /** When this person starts. null = at the time of the whole rotation. */
+  from: number | null;
+  /** When they stop. null = until their bumpout (a break always has an end time). */
+  until: number | null;
 }
 const CHAIN_WHERE: { id: ChainWhere; label: string; cls: string }[] = [
   { id: "front", label: "Front", cls: "pos-front" },
@@ -81,7 +83,7 @@ export default function AssignDialog({
   // a position is held until the lead moves the person, so the default is the rest of the shift
   // (a custom spot like a tournament is usually shorter, so that one defaults to an hour)
   const defaultEnd = (p: NonNullable<typeof person>, f: number, w: Where) =>
-    Math.min(w === "other" ? f + 60 : w === "break" ? f + breakLen(p) : p.end, p.end);
+    Math.min(w === "break" ? f + breakLen(p) : p.end, p.end);
   // Someone with nothing assigned yet starts from where their shift starts (or the first gap), so a
   // starting position covers the time they have been here too. Otherwise it starts now.
   const firstOpen = (p: NonNullable<typeof person>): number | null => {
@@ -169,13 +171,10 @@ export default function AssignDialog({
     for (const r of chainInfo.rows) {
       const sh = r.cands.find((c) => c.id === r.step.who);
       if (!sh || r.step.where === "") return null;
-      const until2 =
-        r.step.where === "break"
-          ? from + (typeof r.step.end === "number" ? r.step.end : 20)
-          : r.step.end === "end"
-            ? sh.end
-            : Math.min(sh.end, from + r.step.end);
-      moves.push({ shiftId: sh.id, dest: r.step.where, until: until2 });
+      const stFrom = r.step.from ?? from;
+      const until2 = Math.min(r.step.until ?? (r.step.where === "break" ? stFrom + 20 : sh.end), sh.end);
+      if (r.step.where !== "bumpout" && until2 <= stFrom) return null;
+      moves.push({ shiftId: sh.id, dest: r.step.where, from: stFrom, until: until2 });
     }
     return moves;
   }, [person, chain, chainInfo, valid, where, label, until, from]);
@@ -240,7 +239,7 @@ export default function AssignDialog({
 
   function addStep() {
     const first = chainInfo.tailPos ? peopleAt(day, settings, chainInfo.tailPos, from, chainInfo.skip)[0] : undefined;
-    setChain([...chain, { who: first?.id ?? "", where: "", end: "end" }]);
+    setChain([...chain, { who: first?.id ?? "", where: "", from: null, until: null }]);
     setOpen(chain.length + 1);
   }
 
@@ -541,38 +540,65 @@ export default function AssignDialog({
                         type="button"
                         className={`brush ${w.cls}`}
                         aria-pressed={r.step.where === w.id}
-                        onClick={() => patchStep(i, { where: w.id, end: w.id === "break" ? (sh ? breakLen(sh) : 20) : "end" })}
+                        onClick={() => patchStep(i, { where: w.id, from: null, until: w.id === "break" ? from + (sh ? breakLen(sh) : 20) : null })}
                       >
                         {w.label}
                       </button>
                     ))}
                   </div>
-                  {r.step.where !== "" && r.step.where !== "bumpout" && (
-                    <label className="lbl">
-                      {r.step.where === "break" ? "Break length" : "For how long? (optional)"}
-                      <select
-                        className="field"
-                        value={String(r.step.end)}
-                        aria-label="How long"
-                        onChange={(e) => patchStep(i, { end: e.target.value === "end" ? "end" : Number(e.target.value) })}
-                      >
-                        {r.step.where === "break"
-                          ? [20, 30, 45, 60].map((m) => (
-                              <option key={m} value={m}>
-                                {m} min
-                              </option>
-                            ))
-                          : (
-                              <>
-                                <option value="end">Until bumpout</option>
-                                <option value="30">30 min</option>
-                                <option value="60">1 hr</option>
-                                <option value="120">2 hr</option>
-                              </>
-                            )}
-                      </select>
-                    </label>
-                  )}
+                  {r.step.where !== "" && r.step.where !== "bumpout" && sh && (() => {
+                    const brk = r.step.where === "break";
+                    const stFrom = r.step.from ?? from;
+                    const stUntil = r.step.until ?? sh.end;
+                    const chips = brk
+                      ? [20, 30, 45, 60].map((m) => ({ label: `${m} min`, until: stFrom + m }))
+                      : [
+                          { label: "Until bumpout", until: null as number | null },
+                          { label: "30 min", until: Math.min(stFrom + 30, sh.end) },
+                          { label: "1 hr", until: Math.min(stFrom + 60, sh.end) },
+                          { label: "2 hr", until: Math.min(stFrom + 120, sh.end) },
+                        ];
+                    return (
+                      <>
+                        <div className="two">
+                          <label className="lbl">
+                            {brk ? "Break starts" : "From"}
+                            <TimeSelect
+                              value={stFrom}
+                              min={sh.start}
+                              max={sh.end - g}
+                              label="From"
+                              onChange={(m) => {
+                                if (m == null) return;
+                                // moving the start moves a break's end with it so its length stays the same
+                                patchStep(i, { from: m, until: r.step.until == null ? null : r.step.until + (m - stFrom) });
+                              }}
+                            />
+                          </label>
+                          <label className="lbl">
+                            {brk ? "Break ends" : "Until"}
+                            <TimeSelect
+                              value={stUntil}
+                              min={stFrom + g}
+                              max={sh.end}
+                              label="Until"
+                              onChange={(m) => m != null && patchStep(i, { until: !brk && m >= sh.end ? null : m })}
+                            />
+                          </label>
+                        </div>
+                        <div className="chip-row">
+                          {chips.map((c) => {
+                            const on = c.until == null ? r.step.until == null : r.step.until === c.until || (r.step.until == null && c.until === sh.end);
+                            return (
+                              <button key={c.label} type="button" className="btn small" aria-pressed={on} onClick={() => patchStep(i, { until: c.until })}>
+                                {c.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}
