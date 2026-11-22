@@ -36,10 +36,11 @@ import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
 import TeamTab from "./TeamTab";
 import HistoryTab from "./HistoryTab";
+import AdminTab from "./AdminTab";
 import ChecksTab, { ago } from "./ChecksTab";
 import { addCheck, checkStatus } from "@/lib/checks";
 
-type Tab = "board" | "breaks" | "checks" | "history" | "team";
+type Tab = "board" | "breaks" | "checks" | "history" | "team" | "admin";
 
 export default function App({
   profile,
@@ -64,6 +65,8 @@ export default function App({
   const [coverPrompt, setCoverPrompt] = useState<CoverPrompt | null>(null);
   const [snoozeUntil, setSnoozeUntil] = useState<number | null>(null);
   const [cloudReady, setCloudReady] = useState(!cloud);
+  const [sync, setSync] = useState<"saved" | "saving" | "error">("saved");
+  const isAdmin = cloud && profile.role === "owner";
   const savedDays = useRef<Record<string, string>>({});
   const savedSettings = useRef<string>("");
 
@@ -124,21 +127,93 @@ export default function App({
     };
   }, [cloud, cloudReady, date]);
 
-  // save changed days and settings to the database a moment after the last change
-  useEffect(() => {
-    if (!cloud || !cloudReady) return;
-    const t = window.setTimeout(async () => {
-      for (const [d, v] of Object.entries(state.days)) {
+  // Every change is saved to the database a moment later. A failed save is tried again, and the page
+  // warns before it is closed while something is still unsaved.
+  const flushing = useRef(false);
+  const isDirty = useCallback(() => {
+    const st = stateRef.current;
+    const days = Object.entries(st.days).some(([d, v]) => {
+      if (!v.shifts.length && !(v.checks ?? []).length && savedDays.current[d] == null) return false;
+      return JSON.stringify(v) !== savedDays.current[d];
+    });
+    return days || JSON.stringify(st.settings) !== savedSettings.current;
+  }, []);
+
+  const flush = useCallback(async () => {
+    if (!cloud || flushing.current) return;
+    flushing.current = true;
+    setSync("saving");
+    let ok = true;
+    try {
+      const st = stateRef.current;
+      for (const [d, v] of Object.entries(st.days)) {
         if (!v.shifts.length && !(v.checks ?? []).length && savedDays.current[d] == null) continue;
         const json = JSON.stringify(v);
         if (savedDays.current[d] === json) continue;
         if (await saveDay(v, profile.id)) savedDays.current[d] = json;
+        else ok = false;
       }
-      const sj = JSON.stringify(state.settings);
-      if (savedSettings.current !== sj && (await saveSettings(state.settings))) savedSettings.current = sj;
-    }, 700);
+      const sj = JSON.stringify(st.settings);
+      if (savedSettings.current !== sj) {
+        if (await saveSettings(st.settings)) savedSettings.current = sj;
+        else ok = false;
+      }
+    } catch {
+      ok = false;
+    } finally {
+      flushing.current = false;
+    }
+    // something changed while saving: go round again shortly
+    setSync(ok && !isDirty() ? "saved" : ok ? "saving" : "error");
+  }, [cloud, profile.id, isDirty]);
+
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    if (isDirty()) setSync((s) => (s === "error" ? s : "saving"));
+    const t = window.setTimeout(() => void flush(), 700);
     return () => window.clearTimeout(t);
-  }, [state.days, state.settings, cloud, cloudReady, profile.id]);
+  }, [state.days, state.settings, cloud, cloudReady, flush, isDirty]);
+
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    const retry = window.setInterval(() => isDirty() && void flush(), 8000);
+    const onHide = () => document.visibilityState === "hidden" && isDirty() && void flush();
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (!isDirty()) return;
+      void flush();
+      e.preventDefault();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onLeave);
+    return () => {
+      window.clearInterval(retry);
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onLeave);
+    };
+  }, [cloud, cloudReady, flush, isDirty]);
+
+  // another device may have changed the day: when this one has nothing unsaved, take the newer copy
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    const pull = async () => {
+      if (isDirty() || flushing.current) return;
+      const d = await loadDay(date);
+      if (!d || isDirty() || flushing.current) return;
+      const json = JSON.stringify(d);
+      if (json === savedDays.current[date]) return;
+      savedDays.current[date] = json;
+      setState((prev) => ({ ...prev, days: { ...prev.days, [date]: refresh(d, prev) } }));
+    };
+    const id = window.setInterval(() => void pull(), 15000);
+    const onShow = () => document.visibilityState === "visible" && void pull();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, [cloud, cloudReady, date, isDirty]);
 
   // break starts and stops pressed on staff phones land here
   useEffect(() => {
@@ -363,6 +438,11 @@ export default function App({
 
         <div className="tools">
         <div className="acct no-print">
+          {cloud && (
+            <span className={`sync ${sync}`} role="status">
+              {sync === "saved" ? "✓ Saved" : sync === "saving" ? "Saving…" : "⚠ Not saved, retrying"}
+            </span>
+          )}
           <span>
             <b>{profile.name || profile.email}</b> · {ROLE_LABEL[profile.role]}
           </span>
@@ -459,6 +539,7 @@ export default function App({
             ["checks", "Checks", null],
             ...(cloud ? ([["history", "History", null]] as [Tab, string, number | null][]) : []),
             ["team", "Team", day.shifts.length || null],
+            ...(isAdmin ? ([["admin", "Admin", null]] as [Tab, string, number | null][]) : []),
           ] as [Tab, string, number | null][]
         ).map(([id, label, count]) => (
           <button
@@ -524,6 +605,7 @@ export default function App({
           />
         )}
         {tab === "team" && <TeamTab ctx={ctx} />}
+        {tab === "admin" && isAdmin && <AdminTab ctx={ctx} selfId={profile.id} />}
       </main>
 
       {coverPrompt && <CoverDialog key={coverPrompt.title + coverPrompt.when} prompt={coverPrompt} onClose={() => setCoverPrompt(null)} />}

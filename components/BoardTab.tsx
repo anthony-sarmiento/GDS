@@ -22,7 +22,7 @@ import {
   staffStatus,
   suggestCover,
 } from "@/lib/rotation";
-import { bumpOut, endBreak, eraseCells, paintCells, placeBreak, startBreak } from "@/lib/store";
+import { bumpOut, endBreak, eraseCells, moveShift, paintCells, placeBreak, startBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fmtShort, fromInput, toInput } from "@/lib/time";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
 
@@ -371,6 +371,40 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const dragRef = useRef<Drag | null>(null);
+
+  // drag a name up or down to change the order of the rows (a view aid only)
+  const rowEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const [moving, setMoving] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const overRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!moving) return;
+    const onMove = (e: PointerEvent) => {
+      const rows = Object.entries(rowEls.current).filter(([, el]) => el) as [string, HTMLDivElement][];
+      if (!rows.length) return;
+      rows.sort((a, b) => a[1].getBoundingClientRect().top - b[1].getBoundingClientRect().top);
+      let hit = rows.find(([, el]) => e.clientY >= el.getBoundingClientRect().top && e.clientY < el.getBoundingClientRect().bottom)?.[0];
+      if (!hit) hit = e.clientY < rows[0][1].getBoundingClientRect().top ? rows[0][0] : rows[rows.length - 1][0];
+      overRef.current = hit;
+      setOverId(hit);
+    };
+    const onUp = () => {
+      const target = overRef.current;
+      const id = moving;
+      overRef.current = null;
+      setMoving(null);
+      setOverId(null);
+      if (target && id && target !== id) live.current.ctx.mutate((d) => moveShift(d, id, target));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [moving]);
   const live = useRef({ ctx, brush, customLabel });
   live.current = { ctx, brush, customLabel };
 
@@ -681,10 +715,32 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           {crew.map((s) => {
             const { runs, pins, gaps } = positionRuns(day, settings, s);
             const inDrag = drag?.shiftId === s.id;
+            const idx = crew.findIndex((x) => x.id === s.id);
+            const from = moving ? crew.findIndex((x) => x.id === moving) : -1;
+            const drop = moving && overId === s.id && moving !== s.id ? (idx > from ? "drop-after" : "drop-before") : "";
             return (
-              <div className="tl-row" key={s.id}>
+              <div
+                className={`tl-row ${moving === s.id ? "row-moving" : ""} ${drop}`}
+                key={s.id}
+                ref={(el) => {
+                  rowEls.current[s.id] = el;
+                }}
+              >
                 <div className="tl-label">
                   <div className="who-line">
+                    <button
+                      type="button"
+                      className="grip"
+                      aria-label={`Drag ${s.name} up or down`}
+                      title="Drag to move this row up or down"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        setMoving(s.id);
+                        overRef.current = s.id;
+                      }}
+                    >
+                      ⋮⋮
+                    </button>
                     <button
                       className="who-name link"
                       onClick={() => onAssign(s.id, Math.max(s.start, now ?? s.start))}

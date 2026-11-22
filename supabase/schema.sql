@@ -14,6 +14,17 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Is the signed-in person an admin? Only admins can change anyone's role.
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'owner');
+$$;
+
 -- Is the signed-in person on the lead side?
 create or replace function public.is_lead()
 returns boolean
@@ -41,7 +52,7 @@ begin
     new.id,
     coalesce(new.email, ''),
     coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(coalesce(new.email, ''), '@', 1)),
-    case when lower(coalesce(new.email, '')) = 'antsarmiento440@gmail.com' then 'lead' else 'staff' end
+    case when lower(coalesce(new.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end
   )
   on conflict (id) do nothing;
   return new;
@@ -58,13 +69,13 @@ insert into public.profiles (id, email, name, role)
 select u.id,
        coalesce(u.email, ''),
        coalesce(u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name', split_part(coalesce(u.email, ''), '@', 1)),
-       case when lower(coalesce(u.email, '')) = 'antsarmiento440@gmail.com' then 'lead' else 'staff' end
+       case when lower(coalesce(u.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end
 from auth.users u
 on conflict (id) do nothing;
 
--- The first lead is always a lead, even if a profile was created some other way
-update public.profiles set role = 'lead'
-where lower(email) = 'antsarmiento440@gmail.com' and role = 'staff';
+-- The first account is the admin ('owner' in the database), even if its profile was made some other way
+update public.profiles set role = 'owner'
+where lower(email) = 'antsarmiento440@gmail.com' and role <> 'owner';
 
 -- ---------------------------------------------------------------------------
 -- Saved people (so names are not typed again). `email` links a person to their Google account.
@@ -122,7 +133,7 @@ drop policy if exists profiles_insert on public.profiles;
 drop policy if exists profiles_update on public.profiles;
 create policy profiles_read   on public.profiles for select to authenticated using (id = auth.uid() or public.is_lead());
 create policy profiles_insert on public.profiles for insert to authenticated with check (id = auth.uid() and role = 'staff');
-create policy profiles_update on public.profiles for update to authenticated using (public.is_lead()) with check (public.is_lead());
+create policy profiles_update on public.profiles for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists team_all on public.team;
 create policy team_all on public.team for all to authenticated using (public.is_lead()) with check (public.is_lead());
@@ -250,6 +261,7 @@ revoke all on function public.staff_break(text, text, text, text, int) from publ
 grant execute on function public.my_day(text) to authenticated;
 grant execute on function public.staff_break(text, text, text, text, int) to authenticated;
 grant execute on function public.is_lead() to authenticated;
+grant execute on function public.is_admin() to authenticated;
 
 -- Let the lead's screen hear about staff break presses right away
 do $$

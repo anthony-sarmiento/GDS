@@ -4,6 +4,23 @@ import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent 
 import { clearAutoCells, clearCover, transitColumns } from "./cover";
 import { normalizeEnd } from "./time";
 
+/**
+ * Move one person's row to where another person's row is, for a better view of the board. Only the
+ * order on screen changes. Leads keep their place among the rows.
+ */
+export function moveShift(day: DayState, id: string, targetId: string): DayState {
+  if (id === targetId) return day;
+  const crew = day.shifts.filter((s) => !s.role);
+  const from = crew.findIndex((s) => s.id === id);
+  const to = crew.findIndex((s) => s.id === targetId);
+  if (from < 0 || to < 0) return day;
+  const order = [...crew];
+  const [moved] = order.splice(from, 1);
+  order.splice(to, 0, moved);
+  let k = 0;
+  return { ...day, shifts: day.shifts.map((s) => (s.role ? s : order[k++])) };
+}
+
 export const STORAGE_KEY = "gds:v2";
 /** The first version's key. Anything saved under it was test data, so it is removed. */
 const OLD_KEY = "gds:v1";

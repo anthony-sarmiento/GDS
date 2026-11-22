@@ -14,7 +14,7 @@ export const supabase = createClient(URL, KEY, {
 
 export type Role = "staff" | "lead" | "manager" | "owner";
 export const isLeadSide = (r: Role) => r !== "staff";
-export const ROLE_LABEL: Record<Role, string> = { staff: "Staff", lead: "Lead", manager: "Manager", owner: "Owner" };
+export const ROLE_LABEL: Record<Role, string> = { staff: "Staff", lead: "Lead", manager: "Manager", owner: "Admin" };
 
 export interface Profile {
   id: string;

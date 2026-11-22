@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Ctx } from "./ctx";
 import CoverPicker from "./CoverPicker";
 import TimeSelect from "./TimeSelect";
-import { CellPos, Position, POSITION_LABEL } from "@/lib/types";
-import { cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
+import { CellPos, Position, POSITION_LABEL, Shift } from "@/lib/types";
+import { breakAtCell, cellAt, cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
+import { applyChain, ChainMove, peopleAt } from "@/lib/chain";
 import { analyzeCover, applyBreakChange, coverOptions } from "@/lib/cover";
 import { assignRange, paintCells, placeBreak } from "@/lib/store";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
@@ -15,6 +16,24 @@ import { breakKind, breaksOwed, KIND_LABEL, onLog } from "@/lib/breaks";
 const round5 = (t: number) => Math.round(t / 5) * 5;
 
 type Where = CellPos | "break";
+
+/** One more person in a rotation chain. */
+type ChainWhere = Position | "break" | "bumpout";
+interface ChainStep {
+  who: string;
+  where: ChainWhere | "";
+  /** "end" = until their bumpout; a number = minutes (the break length for a break). */
+  end: "end" | number;
+}
+const CHAIN_WHERE: { id: ChainWhere; label: string; cls: string }[] = [
+  { id: "front", label: "Front", cls: "pos-front" },
+  { id: "bar", label: "Bar", cls: "pos-bar" },
+  { id: "dungeon", label: "Dungeon", cls: "pos-dungeon" },
+  { id: "break", label: "Break", cls: "brush-break" },
+  { id: "bumpout", label: "Bumpout", cls: "brush-bump" },
+];
+const chainDest = (w: ChainWhere | "") => (w === "" ? "…" : w === "break" ? "Break" : w === "bumpout" ? "Bumpout" : POSITION_LABEL[w]);
+const isSpot = (w: string): w is Position => w === "front" || w === "bar" || w === "dungeon";
 
 const WHERE: { id: Where; label: string; cls: string }[] = [
   { id: "front", label: "Front", cls: "pos-front" },
@@ -79,6 +98,10 @@ export default function AssignDialog({
   const [coverChoice, setCoverChoice] = useState<string | null | undefined>(undefined);
   useEffect(() => setCoverChoice(undefined), [who, where, from, until]);
 
+  // rotation chain: more people who move as part of this same action
+  const [chain, setChain] = useState<ChainStep[]>([]);
+  const [open, setOpen] = useState(0);
+
   const isBreak = where === "break";
   const cellsAll = useMemo(() => cellsFor(day.shifts, settings), [day.shifts, settings]);
   const targetCells = useMemo(
@@ -127,6 +150,47 @@ export default function AssignDialog({
   const effective = coverChoice === undefined && !needsCover ? null : coverChoice;
   const blocked = showPicker && needsCover && effective === undefined;
 
+  // Each extra step is "who at <the place the last person is going> moves, and where do they go".
+  const chainInfo = useMemo(() => {
+    const skip: string[] = person ? [person.id] : [];
+    let prevPos: Position | null = isSpot(where) ? where : null;
+    const rows: { step: ChainStep; prev: Position | null; cands: Shift[] }[] = [];
+    for (const st of chain) {
+      rows.push({ step: st, prev: prevPos, cands: prevPos ? peopleAt(day, settings, prevPos, from, skip) : [] });
+      if (st.who) skip.push(st.who);
+      prevPos = isSpot(st.where) ? st.where : null;
+    }
+    return { rows, tailPos: prevPos, skip };
+  }, [chain, person, where, day, settings, from]);
+
+  const chainMoves: ChainMove[] | null = useMemo(() => {
+    if (!person || chain.length === 0 || !valid) return null;
+    const moves: ChainMove[] = [{ shiftId: person.id, dest: where, label: label.trim() || undefined, until }];
+    for (const r of chainInfo.rows) {
+      const sh = r.cands.find((c) => c.id === r.step.who);
+      if (!sh || r.step.where === "") return null;
+      const until2 =
+        r.step.where === "break"
+          ? from + (typeof r.step.end === "number" ? r.step.end : 20)
+          : r.step.end === "end"
+            ? sh.end
+            : Math.min(sh.end, from + r.step.end);
+      moves.push({ shiftId: sh.id, dest: r.step.where, until: until2 });
+    }
+    return moves;
+  }, [person, chain, chainInfo, valid, where, label, until, from]);
+
+  // how many people are on each position once everything has moved
+  const chainAfter = useMemo(() => {
+    if (!chainMoves) return null;
+    const draft = applyChain(day, settings, from, chainMoves);
+    const col = cellAt(cellsFor(draft.shifts, settings), g, from + settings.transitMinutes);
+    if (col == null) return null;
+    const on = staffAt(draft, settings, col);
+    const away = rotating(draft.shifts).filter((x) => isPresent(x, col, g) && breakAtCell(x, col, g)).length;
+    return { counts: { front: on.front.length, bar: on.bar.length, dungeon: on.dungeon.length }, away };
+  }, [chainMoves, day, settings, from, g]);
+
   if (!person) {
     return (
       <div className="modal-back" onClick={onClose} role="presentation">
@@ -142,6 +206,8 @@ export default function AssignDialog({
   }
 
   function changeWho(id: string) {
+    setChain([]);
+    setOpen(0);
     setWho(id);
     const p = crew.find((s) => s.id === id);
     if (!p) return;
@@ -157,6 +223,8 @@ export default function AssignDialog({
   }
 
   function changeWhere(w: Where) {
+    setChain([]);
+    setOpen(0);
     setWhere(w);
     // keep a length you set yourself; only reset when switching between kinds of assignment
     if (w === "break" || isBreak || w === "other" || where === "other") {
@@ -166,7 +234,27 @@ export default function AssignDialog({
     }
   }
 
+  function patchStep(i: number, patch: Partial<ChainStep>) {
+    setChain((cur) => cur.map((st, k) => (k === i ? { ...st, ...patch } : st)));
+  }
+
+  function addStep() {
+    const first = chainInfo.tailPos ? peopleAt(day, settings, chainInfo.tailPos, from, chainInfo.skip)[0] : undefined;
+    setChain([...chain, { who: first?.id ?? "", where: "", end: "end" }]);
+    setOpen(chain.length + 1);
+  }
+
+  function confirmChain() {
+    if (!chainMoves) return;
+    mutate((d) => applyChain(d, settings, from, chainMoves), { auto: true });
+    const label0 = (m: ChainMove) =>
+      `${day.shifts.find((x) => x.id === m.shiftId)?.name ?? "?"} → ${m.dest === "other" ? m.label : m.dest === "break" ? "Break" : m.dest === "bumpout" ? "Bumpout" : POSITION_LABEL[m.dest]}`;
+    flash(`${fmt(from)} · ${chainMoves.map(label0).join(", ")}`);
+    onClose();
+  }
+
   function confirm() {
+    if (chain.length > 0) return confirmChain();
     if (!valid || !person || blocked) return;
     const name = label.trim();
     const chosen = crew.find((s) => s.id === effective);
@@ -241,6 +329,7 @@ export default function AssignDialog({
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: 10 }}>Assign</h2>
 
+        <div hidden={chain.length > 0 && open !== 0}>
         <div className="stack">
           <label className="lbl">
             <span className="step-head"><span className="step">1</span>Who are you moving?</span>
@@ -384,7 +473,138 @@ export default function AssignDialog({
           )}
         </div>
 
-        {showPicker && impact && position && (
+        </div>
+
+        {chain.length > 0 && (
+          <div className="chain">
+            {open !== 0 && (
+              <button type="button" className="chain-sum" onClick={() => setOpen(0)}>
+                <span className="step">1</span>
+                <span>
+                  {person.name} → {isBreak ? "Break" : where === "other" ? label.trim() || "Custom" : POSITION_LABEL[where as Position]}
+                </span>
+                <small>edit</small>
+              </button>
+            )}
+            {chainInfo.rows.map((r, i) => {
+              const n = i + 2;
+              const sh = r.cands.find((c) => c.id === r.step.who);
+              if (open !== i + 1) {
+                return (
+                  <div className="chain-sum" key={i}>
+                    <span className="step">{n}</span>
+                    <span>
+                      {sh?.name ?? "?"} → {chainDest(r.step.where)}
+                    </span>
+                    <button type="button" className="btn ghost small" onClick={() => setOpen(i + 1)}>
+                      edit
+                    </button>
+                    {i === chain.length - 1 && (
+                      <button
+                        type="button"
+                        className="btn ghost small"
+                        aria-label="Remove this step"
+                        onClick={() => {
+                          setChain(chain.slice(0, -1));
+                          setOpen(0);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div className="chain-step" key={i}>
+                  <div className="step-head">
+                    <span className="step">{n}</span>
+                    Who at {r.prev ? POSITION_LABEL[r.prev] : "that spot"} is moving?
+                  </div>
+                  {r.cands.length > 0 ? (
+                    <select className="field" value={r.step.who} aria-label="Who is moving" onChange={(e) => patchStep(i, { who: e.target.value })}>
+                      <option value="">Pick someone</option>
+                      {r.cands.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="note warn">Nobody else is on {r.prev ? POSITION_LABEL[r.prev] : "that spot"} at {fmt(from)}.</div>
+                  )}
+                  <div className="step-head">Where are they going?</div>
+                  <div className="where-grid" role="group" aria-label="Where they are going">
+                    {CHAIN_WHERE.filter((w) => w.id !== r.prev).map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        className={`brush ${w.cls}`}
+                        aria-pressed={r.step.where === w.id}
+                        onClick={() => patchStep(i, { where: w.id, end: w.id === "break" ? (sh ? breakLen(sh) : 20) : "end" })}
+                      >
+                        {w.label}
+                      </button>
+                    ))}
+                  </div>
+                  {r.step.where !== "" && r.step.where !== "bumpout" && (
+                    <label className="lbl">
+                      {r.step.where === "break" ? "Break length" : "For how long? (optional)"}
+                      <select
+                        className="field"
+                        value={String(r.step.end)}
+                        aria-label="How long"
+                        onChange={(e) => patchStep(i, { end: e.target.value === "end" ? "end" : Number(e.target.value) })}
+                      >
+                        {r.step.where === "break"
+                          ? [20, 30, 45, 60].map((m) => (
+                              <option key={m} value={m}>
+                                {m} min
+                              </option>
+                            ))
+                          : (
+                              <>
+                                <option value="end">Until bumpout</option>
+                                <option value="30">30 min</option>
+                                <option value="60">1 hr</option>
+                                <option value="120">2 hr</option>
+                              </>
+                            )}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+            {chainAfter && (
+              <div className="chain-counts" aria-label="Headcount afterwards">
+                {(["front", "bar", "dungeon"] as Position[]).map((p) => {
+                  const { min, max } = settings.limits[p];
+                  const c = chainAfter.counts[p];
+                  const tone = c < min ? (c === 0 ? "bad" : "warn") : c > max ? "warn" : "ok";
+                  return (
+                    <span key={p} className={`chain-count ${tone}`}>
+                      {POSITION_LABEL[p]} <b>{c}</b>
+                    </span>
+                  );
+                })}
+                {chainAfter.away > 0 && (
+                  <span className="chain-count ok">
+                    On break <b>{chainAfter.away}</b>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {valid && chainInfo.tailPos && chain.every((st) => st.who && st.where) && (
+          <button type="button" className="btn add-rot" onClick={addStep}>
+            + Add rotation
+          </button>
+        )}
+
+        {showPicker && chain.length === 0 && impact && position && (
           <div style={{ marginTop: 14 }}>
             <CoverPicker
               position={position}
@@ -397,12 +617,12 @@ export default function AssignDialog({
           </div>
         )}
 
-        <div className="row" style={{ marginTop: 14, justifyContent: "flex-end" }}>
+        <div className="assign-foot">
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" onClick={confirm} disabled={!valid || blocked}>
-            {isBreak ? "Send on break" : "Assign"}
+          <button className="btn primary" onClick={confirm} disabled={chain.length > 0 ? !chainMoves : !valid || blocked}>
+            {chain.length > 0 ? `Assign ${chain.length + 1} moves` : isBreak ? "Send on break" : "Assign"}
           </button>
         </div>
       </div>
