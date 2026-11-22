@@ -3292,3 +3292,27 @@ button.chain-sum {
 .staff-break.done {
   grid-template-columns: none;
 }
+
+/* bumpout */
+.staff-hero.tone-bump { --tone: var(--green); }
+
+.staff-bump {
+  display: grid;
+  gap: 8px;
+}
+
+.staff-bump .bump-btn {
+  width: 100%;
+  min-height: 58px;
+  font-size: 1.15rem;
+  border-radius: 14px;
+  background: var(--navy-900);
+  color: var(--green);
+  border: none;
+}
+
+.staff-bump.done {
+  background: var(--navy-800);
+  color: var(--text);
+  border: 1px solid var(--line);
+}

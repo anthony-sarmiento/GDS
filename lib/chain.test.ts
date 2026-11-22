@@ -50,7 +50,7 @@ describe("rotation chains", () => {
     expect(at(day, "Anna", h(13, 55))?.pos).toBe("front");
   });
 
-  it("a bumpout in the chain sends that person home and says who took over", () => {
+  it("a bumpout in the chain becomes their assignment, and says who takes over", () => {
     const d0 = setUp();
     const end = find(d0, "Anna").end;
     const day = applyChain(d0, S, h(14), [
@@ -58,8 +58,10 @@ describe("rotation chains", () => {
       { shiftId: find(d0, "Anna").id, dest: "bumpout", until: end },
     ]);
     const anna = find(day, "Anna");
-    expect(anna.sentHomeAt).toBe(h(14));
+    expect(anna.bumpoutAt).toBe(h(14));
+    expect(anna.sentHomeAt).toBeUndefined();
     expect(anna.bumpedBy).toBe("Dee");
+    expect(at(day, "Anna", h(14, 30))).toMatchObject({ label: "Bumpout", bump: true });
     expect(at(day, "Dee", h(15))?.pos).toBe("front");
   });
 });
@@ -82,5 +84,26 @@ describe("times in a chain", () => {
     const placed = ben.breaks.find((b) => b.planned != null)!;
     expect(placed.planned).toBe(h(14, 30));
     expect(placed.length).toBe(30);
+  });
+});
+
+describe("staying on until the bumpout", () => {
+  it("keeps someone on the board past their clock-out time until they are bumped out", async () => {
+    const { holdOver, needsHoldOver, finishBumpout } = await import("./store");
+    const d0 = setUp();
+    // it is 5:10 and nobody has bumped Anna out (scheduled 11-5)
+    expect(needsHoldOver(d0, h(17, 10))).toBe(true);
+    const held = holdOver(d0, h(17, 10));
+    const anna = find(held, "Anna");
+    expect(anna.end).toBe(h(17, 25));
+    expect(anna.scheduledEnd).toBe(h(17));
+    expect(anna.breaks).toEqual(find(d0, "Anna").breaks); // the break log does not change
+    // still on her position after 5:00
+    expect(at(held, "Anna", h(17, 15))?.pos).toBe("front");
+    // once bumped out she stays off
+    const out = finishBumpout(held, S, anna.id, h(17, 20));
+    expect(find(out, "Anna")).toMatchObject({ sentHomeAt: h(17, 20), end: h(17, 20) });
+    expect(needsHoldOver(out, h(18))).toBe(true); // the others are still on
+    expect(holdOver(out, h(18)).shifts.find((s) => s.name === "Anna")!.end).toBe(h(17, 20));
   });
 });

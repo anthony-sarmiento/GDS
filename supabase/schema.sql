@@ -279,6 +279,43 @@ begin
 end;
 $$;
 
+-- "I have clocked out", pressed on a staff phone. Only allowed once the lead has made Bumpout their assignment.
+alter table public.staff_events drop constraint if exists staff_events_kind_check;
+alter table public.staff_events add constraint staff_events_kind_check check (kind in ('start', 'end', 'bumpout'));
+
+create or replace function public.staff_bumpout(d text, p_shift text, p_at int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me_name text;
+  ok      boolean;
+begin
+  if auth.uid() is null then raise exception 'not signed in'; end if;
+  select public.member_name_for(lower(coalesce(auth.jwt() ->> 'email', ''))) into me_name;
+  if me_name is null then raise exception 'not linked to a team member'; end if;
+
+  select exists (
+    select 1
+    from public.days dd, jsonb_array_elements(dd.data -> 'shifts') s
+    where dd.date = d
+      and s ->> 'id' = p_shift
+      and lower(s ->> 'name') = lower(me_name)
+      and s ? 'bumpoutAt'
+      and (s ->> 'bumpoutAt')::int <= p_at
+      and not (s ? 'sentHomeAt')
+  ) into ok;
+  if not ok then raise exception 'bumpout is not your assignment yet'; end if;
+
+  insert into public.staff_events (date, shift_id, break_id, kind, at, user_id)
+  values (d, p_shift, '', 'bumpout', p_at, auth.uid());
+end;
+$$;
+revoke all on function public.staff_bumpout(text, text, int) from public, anon;
+grant execute on function public.staff_bumpout(text, text, int) to authenticated;
+
 revoke all on function public.my_day(text) from public, anon;
 revoke all on function public.staff_break(text, text, text, text, int) from public, anon;
 grant execute on function public.my_day(text) to authenticated;

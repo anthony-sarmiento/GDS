@@ -28,7 +28,20 @@ import {
   prettyDate,
   toInput,
 } from "@/lib/time";
-import { emptyDay, endBreak, initialState, loadState, mergeSettings, refresh, rememberName, saveState, startBreak } from "@/lib/store";
+import {
+  emptyDay,
+  endBreak,
+  finishBumpout,
+  holdOver,
+  initialState,
+  loadState,
+  mergeSettings,
+  needsHoldOver,
+  refresh,
+  rememberName,
+  saveState,
+  startBreak,
+} from "@/lib/store";
 import { breakStatus } from "@/lib/breaks";
 import { Ctx, CoverPrompt } from "./ctx";
 import { emptyHistory, History, recordChange, stepBack, stepForward } from "@/lib/history";
@@ -249,8 +262,16 @@ export default function App({
           for (const e of events) {
             const d = days[e.date];
             const sh = d?.shifts.find((x) => x.id === e.shift_id);
-            const br = sh?.breaks.find((x) => x.id === e.break_id);
-            if (!d || !sh || !br) continue;
+            if (!d || !sh) continue;
+            if (e.kind === "bumpout") {
+              if (sh.sentHomeAt == null) {
+                days[e.date] = refresh(finishBumpout(d, prev.settings, sh.id, e.at), prev);
+                notes.push(sh.name + " bumped out at " + fmt(e.at));
+              }
+              continue;
+            }
+            const br = sh.breaks.find((x) => x.id === e.break_id);
+            if (!br) continue;
             if (e.kind === "start" && br.start == null) {
               days[e.date] = refresh(startBreak(d, sh.id, br.id, e.at), prev);
               notes.push(sh.name + " started a break at " + fmt(e.at));
@@ -282,6 +303,19 @@ export default function App({
     const id = setInterval(() => setClock(new Date()), 15000);
     return () => clearInterval(id);
   }, []);
+
+  // nobody drops off the board at their scheduled out time: they stay on until they are bumped out
+  useEffect(() => {
+    if (!ready) return;
+    const today = operatingDate(clock);
+    const t = operatingMinutes(clock);
+    const d = stateRef.current.days[today];
+    if (!d || !needsHoldOver(d, t)) return;
+    setState((prev) => {
+      const base = prev.days[today];
+      return base ? { ...prev, days: { ...prev.days, [today]: refresh(holdOver(base, t), prev) } } : prev;
+    });
+  }, [clock, ready]);
 
   const day: DayState = state.days[date] ?? emptyDay(date);
   const live = date === operatingDate(clock);

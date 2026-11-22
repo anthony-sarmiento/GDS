@@ -99,7 +99,7 @@ export interface StaffEvent {
   date: string;
   shift_id: string;
   break_id: string;
-  kind: "start" | "end";
+  kind: "start" | "end" | "bumpout";
   at: number;
 }
 
@@ -133,12 +133,18 @@ export interface MyDay {
   shifts?: import("./types").Shift[];
   cells?: Record<string, import("./types").Cell>;
   settings?: Settings | null;
-  events?: { shift_id: string; break_id: string; kind: "start" | "end"; at: number }[];
+  events?: { shift_id: string; break_id: string; kind: "start" | "end" | "bumpout"; at: number }[];
 }
 
 export async function loadMyDay(date: string): Promise<MyDay | null> {
   const { data, error } = await supabase.rpc("my_day", { d: date });
   return error ? null : (data as MyDay);
+}
+
+/** "I have clocked out": only works when Bumpout is their assignment. */
+export async function pressBumpout(date: string, shiftId: string, at: number): Promise<boolean> {
+  const { error } = await supabase.rpc("staff_bumpout", { d: date, p_shift: shiftId, p_at: at });
+  return !error;
 }
 
 export async function pressBreak(date: string, shiftId: string, breakId: string, kind: "start" | "end", at: number): Promise<boolean> {

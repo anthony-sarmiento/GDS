@@ -8,14 +8,14 @@ import { CellPos, Position, POSITION_LABEL, Shift } from "@/lib/types";
 import { breakAtCell, cellAt, cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
 import { applyChain, ChainMove, peopleAt } from "@/lib/chain";
 import { analyzeCover, applyBreakChange, coverOptions } from "@/lib/cover";
-import { assignRange, paintCells, placeBreak } from "@/lib/store";
+import { assignBumpout, assignRange, paintCells, placeBreak } from "@/lib/store";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
 import { fmt, fmtDuration } from "@/lib/time";
 import { breakKind, breaksOwed, KIND_LABEL, onLog } from "@/lib/breaks";
 
 const round5 = (t: number) => Math.round(t / 5) * 5;
 
-type Where = CellPos | "break";
+type Where = CellPos | "break" | "bumpout";
 
 /** One more person in a rotation chain. */
 type ChainWhere = Position | "break" | "bumpout";
@@ -43,6 +43,7 @@ const WHERE: { id: Where; label: string; cls: string }[] = [
   { id: "dungeon", label: "Dungeon", cls: "pos-dungeon" },
   { id: "other", label: "Custom", cls: "pos-other" },
   { id: "break", label: "Break", cls: "brush-break" },
+  { id: "bumpout", label: "Bumpout", cls: "brush-bump" },
 ];
 
 /**
@@ -92,7 +93,7 @@ export default function AssignDialog({
   };
   // a break starts when you send them (now); a position starts from the first unassigned time
   const startFor = (p: NonNullable<typeof person>, w: Where = where) =>
-    round5(Math.min(Math.max(at ?? (w === "break" ? null : firstOpen(p)) ?? now ?? p.start, p.start), p.end - g));
+    round5(Math.min(Math.max(at ?? (w === "break" || w === "bumpout" ? null : firstOpen(p)) ?? now ?? p.start, p.start), p.end - g));
   const startGuess = person ? startFor(person, startWhere ?? "front") : 0;
   const [from, setFrom] = useState(startGuess);
   const [until, setUntil] = useState(person ? defaultEnd(person, startGuess, startWhere ?? "front") : startGuess + 60);
@@ -124,7 +125,7 @@ export default function AssignDialog({
       return { position: a.position, needs: a.needs, remaining: a.remaining, min: a.min, options: a.options, joined: null as number | null };
     }
 
-    const draft = paintCells(day, person.id, targetCells, where, label);
+    const draft = paintCells(day, person.id, targetCells, where === "bumpout" ? "other" : where, label);
     const c0 = targetCells[0];
     const left = ((p) => (p && p !== "other" && p !== where ? (p as Position) : null))(day.cells[cellKey(person.id, c0)]?.pos);
     let worst = c0;
@@ -139,7 +140,7 @@ export default function AssignDialog({
         }
       }
     }
-    const joined = where !== "other" ? staffAt(draft, settings, c0)[where].length : null;
+    const joined = where !== "other" && where !== "bumpout" ? staffAt(draft, settings, c0)[where].length : null;
     if (!left || leftNow == null) return { position: null as Position | null, needs: false, remaining: 0, min: 0, options: [], joined };
     const o = coverOptions(draft, settings, left, [worst, ...targetCells.filter((c) => c !== worst)], person.id);
     return { position: left, needs: o.needs, remaining: leftNow, min: o.min, options: o.options, joined };
@@ -226,8 +227,8 @@ export default function AssignDialog({
     setOpen(0);
     setWhere(w);
     // keep a length you set yourself; only reset when switching between kinds of assignment
-    if (w === "break" || isBreak || w === "other" || where === "other") {
-      const f = at == null && (w === "break" || isBreak) ? startFor(person!, w) : from;
+    if (w === "break" || isBreak || w === "other" || where === "other" || w === "bumpout" || where === "bumpout") {
+      const f = at == null && (w === "break" || isBreak || w === "bumpout") ? startFor(person!, w) : from;
       setFrom(f);
       setUntil(defaultEnd(person!, f, w));
     }
@@ -257,6 +258,20 @@ export default function AssignDialog({
     if (!valid || !person || blocked) return;
     const name = label.trim();
     const chosen = crew.find((s) => s.id === effective);
+
+    if (where === "bumpout") {
+      mutate(
+        (d) => {
+          let next = assignBumpout(d, person.id, from, chosen?.name);
+          if (chosen && position) next = assignRange(next, settings, chosen.id, from, chosen.end, position);
+          return next;
+        },
+        { auto: true },
+      );
+      flash(`${person.name}: bumpout at ${fmt(from)}${chosen && position ? ` · ${chosen.name} takes ${POSITION_LABEL[position]}` : ""}`);
+      onClose();
+      return;
+    }
 
     if (isBreak) {
       mutate(
@@ -398,6 +413,15 @@ export default function AssignDialog({
             </div>
           )}
 
+          {where === "bumpout" ? (
+            <label className="lbl">
+              <span className="step-head">
+                <span className="step">3</span>When?
+              </span>
+              <TimeSelect value={from} min={person.start} max={person.end - g} label="When" onChange={(m) => m != null && changeFrom(m)} />
+            </label>
+          ) : (
+          <>
           <div className="step-head" style={{ marginBottom: -4 }}>
             <span className="step">3</span>
             {isBreak ? "When and how long?" : "For how long?"}
@@ -439,6 +463,8 @@ export default function AssignDialog({
               );
             })}
           </div>
+          </>
+          )}
         </div>
 
         <div className="impact" aria-live="polite">
@@ -446,7 +472,7 @@ export default function AssignDialog({
           {until > from && targetCells.length === 0 && <div className="note bad">{person.name} is not working then.</div>}
           {valid && (
             <div className="note">
-              {person.name} → <b>{isBreak ? "Break" : where === "other" ? label.trim() : POSITION_LABEL[where as Position]}</b>,{" "}
+              {person.name} → <b>{isBreak ? "Break" : where === "bumpout" ? "Bumpout" : where === "other" ? label.trim() : POSITION_LABEL[where as Position]}</b>,{" "}
               {fmt(from)}–{fmt(until)} ({fmtDuration(until - from)})
             </div>
           )}
@@ -480,7 +506,7 @@ export default function AssignDialog({
               <button type="button" className="chain-sum" onClick={() => setOpen(0)}>
                 <span className="step">1</span>
                 <span>
-                  {person.name} → {isBreak ? "Break" : where === "other" ? label.trim() || "Custom" : POSITION_LABEL[where as Position]}
+                  {person.name} → {isBreak ? "Break" : where === "bumpout" ? "Bumpout" : where === "other" ? label.trim() || "Custom" : POSITION_LABEL[where as Position]}
                 </span>
                 <small>edit</small>
               </button>
@@ -648,7 +674,7 @@ export default function AssignDialog({
             Cancel
           </button>
           <button className="btn primary" onClick={confirm} disabled={chain.length > 0 ? !chainMoves : !valid || blocked}>
-            {chain.length > 0 ? `Assign ${chain.length + 1} moves` : isBreak ? "Send on break" : "Assign"}
+            {chain.length > 0 ? `Assign ${chain.length + 1} moves` : isBreak ? "Send on break" : where === "bumpout" ? "Give bumpout" : "Assign"}
           </button>
         </div>
       </div>

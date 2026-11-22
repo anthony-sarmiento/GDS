@@ -1,7 +1,7 @@
 import { CellPos, DayState, Position, Settings, Shift } from "./types";
 import { afterRun, applyBreakChange } from "./cover";
 import { breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent, rotating } from "./rotation";
-import { assignRange, bumpOut, placeBreak } from "./store";
+import { assignBumpout, assignRange, placeBreak } from "./store";
 
 /** Where one person goes in a rotation chain. */
 export type ChainDest = CellPos | "break" | "bumpout";
@@ -34,7 +34,7 @@ export function peopleAt(day: DayState, settings: Settings, pos: Position, t: nu
 /**
  * Carry out a chain of moves that all happen at time `from`: each person goes to their place, usually
  * sending the person who was standing there somewhere else. Someone sent on break comes back to the spot
- * the previous mover left. Someone bumped out is done for the day.
+ * the previous mover left. Someone given their bumpout stays on until they clock out.
  */
 export function applyChain(input: DayState, settings: Settings, from: number, moves: ChainMove[]): DayState {
   // where everyone was standing before anything moved
@@ -52,9 +52,8 @@ export function applyChain(input: DayState, settings: Settings, from: number, mo
     const t = m.from ?? from;
 
     if (m.dest === "bumpout") {
-      day = bumpOut(day, settings, shift.id, null, t);
       const taker = prev ? day.shifts.find((s) => s.id === prev.shiftId) : undefined;
-      if (taker) day = { ...day, shifts: day.shifts.map((s) => (s.id === shift.id ? { ...s, bumpedBy: taker.name } : s)) };
+      day = assignBumpout(day, shift.id, t, taker?.name);
       return;
     }
 

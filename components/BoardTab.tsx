@@ -22,7 +22,7 @@ import {
   staffStatus,
   suggestCover,
 } from "@/lib/rotation";
-import { bumpOut, endBreak, eraseCells, moveShift, paintCells, placeBreak, startBreak } from "@/lib/store";
+import { bumpOut, endBreak, eraseCells, finishBumpout, moveShift, paintCells, placeBreak, startBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fmtShort, fromInput, toInput } from "@/lib/time";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
 
@@ -62,6 +62,16 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
   const crew = rotating(day.shifts);
   const leads = day.shifts.filter((s) => s.role);
 
+  // someone whose bumpout is their assignment is finished with one press; anyone else opens the Bumpout dialog
+  const bump = (id: string) => {
+    const s = day.shifts.find((x) => x.id === id);
+    if (s && s.bumpoutAt != null && s.sentHomeAt == null) {
+      const t = Math.max(now ?? s.bumpoutAt, s.bumpoutAt);
+      mutate((d) => finishBumpout(d, ctx.settings, id, t), { auto: true });
+      ctx.flash(`${s.name} bumped out at ${fmt(t)}`);
+    } else setBumpFor(id);
+  };
+
   if (!crew.length) {
     return (
       <div className="card empty">
@@ -82,7 +92,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         </button>
       </div>
 
-      {now != null && <NowPanel ctx={ctx} onBump={setBumpFor} onAssign={(id) => setAssignFor({ shiftId: id })} />}
+      {now != null && <NowPanel ctx={ctx} onBump={bump} onAssign={(id) => setAssignFor({ shiftId: id })} />}
       {now != null && <BreakQueue ctx={ctx} onSend={(id) => setAssignFor({ shiftId: id, where: "break" })} />}
 
       <div className="section-title">
@@ -116,7 +126,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         </div>
       )}
 
-      <Timeline ctx={ctx} onBump={setBumpFor} onAssign={(id, at) => setAssignFor({ shiftId: id, at })} />
+      <Timeline ctx={ctx} onBump={bump} onAssign={(id, at) => setAssignFor({ shiftId: id, at })} />
 
       <div className="section-title">
         <h2>Time at each position</h2>
@@ -205,12 +215,16 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {s.name}
                     {s.floater && <span className="badge">Floater</span>}
                     {s.lock && <span className="badge">Stays</span>}
-                    <small>out {fmtShort(s.end)}</small>
+                    <small>{s.scheduledEnd != null && s.sentHomeAt == null ? "staying on" : `out ${fmtShort(s.end)}`}</small>
                     <button className="btn ghost small" title={`Assign ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
                       Assign
                     </button>
-                    <button className="btn ghost small" title={`Bump out ${s.name}`} onClick={() => onBump(s.id)}>
-                      Bumpout
+                    <button
+                      className={`btn small ${s.bumpoutAt != null ? "primary" : "ghost"}`}
+                      title={`Bump out ${s.name}`}
+                      onClick={() => onBump(s.id)}
+                    >
+                      {s.bumpoutAt != null ? "Finish bumpout" : "Bumpout"}
                     </button>
                   </div>
                 ))}
@@ -755,16 +769,18 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                         title="Bumpout: hand their spot to the next person"
                         aria-label={`Bump out ${s.name}`}
                       >
-                        {compact ? "⋯" : "Bumpout"}
+                        {compact ? "⋯" : s.bumpoutAt != null ? "Finish bumpout" : "Bumpout"}
                       </button>
                     )}
                   </div>
                   <small>
-                    {fmtShort(s.start)}–{fmtShort(s.end)}
+                    {fmtShort(s.start)}–{fmtShort(s.scheduledEnd ?? s.end)}
                     {s.floater ? " · floater" : ""}
                     {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
                     {needsPosition(day, settings, s) ? " · needs a position" : ""}
                     {s.sentHomeAt != null ? ` · bumped out${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
+                    {s.sentHomeAt == null && s.bumpoutAt != null ? " · bumpout" : ""}
+                    {s.sentHomeAt == null && s.scheduledEnd != null ? " · staying on" : ""}
                   </small>
                 </div>
                 <div className="tl-lane" style={{ width }} onPointerDown={(e) => down(e, s)} onClick={(e) => tap(e, s)}>

@@ -351,6 +351,40 @@ export function placeBreak(
   };
 }
 
+/** Nobody leaves the board at their scheduled time on their own: they stay on until they are bumped out. */
+const heldOver = (s: Shift, t: number) => !s.role && s.sentHomeAt == null && s.start < t && s.end <= t + 5;
+export const needsHoldOver = (day: DayState, t: number) => day.shifts.some((s) => heldOver(s, t));
+
+/** Keep people who are past their clock-out time on the board a little longer (in 15-minute steps). */
+export function holdOver(day: DayState, t: number): DayState {
+  const end = Math.min(28 * 60, Math.ceil((t + 15) / 5) * 5);
+  return {
+    ...day,
+    shifts: day.shifts.map((s) => (heldOver(s, t) ? { ...s, scheduledEnd: s.scheduledEnd ?? s.end, end: Math.max(s.end, end) } : s)),
+  };
+}
+
+/** Give someone "Bumpout" as their assignment from `t`: it is time for them to clock out. `taker` is who takes their spot. */
+export function assignBumpout(day: DayState, shiftId: string, t: number, taker?: string): DayState {
+  return {
+    ...day,
+    shifts: day.shifts.map((s) => (s.id !== shiftId ? s : { ...s, bumpoutAt: Math.round(t), ...(taker ? { bumpedBy: taker } : {}) })),
+  };
+}
+
+/** They have clocked out: the lead pressed Bumpout, or they did on their phone. Their breaks are left as they are. */
+export function finishBumpout(day: DayState, settings: Settings, shiftId: string, t: number): DayState {
+  const at = Math.round(t);
+  return {
+    ...day,
+    shifts: day.shifts.map((s) =>
+      s.id !== shiftId
+        ? s
+        : { ...s, scheduledEnd: s.scheduledEnd ?? s.end, end: Math.max(s.start + settings.gridMinutes, at), sentHomeAt: at },
+    ),
+  };
+}
+
 /**
  * Bump out: `outId` is sent home at `t` and `inId` (usually someone from the later shift) takes
  * over their position from that moment, for the rest of the current rotation block.

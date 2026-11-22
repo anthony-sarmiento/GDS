@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Avatar from "./Avatar";
-import { loadMyDay, MyDay, pressBreak } from "@/lib/cloud";
+import { loadMyDay, MyDay, pressBreak, pressBumpout } from "@/lib/cloud";
 import { Profile } from "@/lib/supabase";
 import { operatingDate, operatingMinutes, prettyDate, fmt, fmtDuration } from "@/lib/time";
 import { breakStatus } from "@/lib/breaks";
@@ -18,7 +18,7 @@ function withPending(shift: Shift, events: NonNullable<MyDay["events"]>): Brk[] 
   return shift.breaks.map((b) => {
     let out = b;
     for (const e of events) {
-      if (e.break_id !== b.id) continue;
+      if (e.kind === "bumpout" || e.break_id !== b.id) continue;
       out = e.kind === "start" ? { ...out, start: e.at, end: null } : { ...out, end: e.at };
     }
     return out;
@@ -120,7 +120,20 @@ export default function StaffApp({
   }, [shift, cells, now, g, settings.anchor]);
 
   const plannedBreak = owed.find((b) => b.planned != null && b.planned + b.length > now);
-  const bumpedOut = shift?.sentHomeAt != null && now >= shift.sentHomeAt;
+  // they pressed Bump out and the lead's screen has not caught up yet
+  const pressedOut = !!shift && (mine?.events ?? []).some((e) => e.kind === "bumpout" && e.shift_id === shift.id);
+  const bumpedOut = (shift?.sentHomeAt != null && now >= shift.sentHomeAt) || pressedOut;
+  // Bumpout is their current assignment: the only time they can press Bump out
+  const bumpTime = !!shift && shift.bumpoutAt != null && now >= shift.bumpoutAt && !bumpedOut;
+
+  async function pressOut() {
+    if (!shift || busy || !cloud) return;
+    setBusy(true);
+    const ok = await pressBumpout(date, shift.id, now);
+    if (ok) await refresh();
+    else setFailed(true);
+    setBusy(false);
+  }
 
   async function press(b: Brk, kind: "start" | "end") {
     if (!shift || busy || !cloud) return;
@@ -136,7 +149,14 @@ export default function StaffApp({
   let tone = "none";
   let sub = "";
   if (shift) {
-    if (active) {
+    if (bumpedOut) {
+      heading = "Done for today";
+      tone = "none";
+    } else if (bumpTime) {
+      heading = "Bumpout";
+      tone = "bump";
+      sub = shift.bumpedBy ? `${shift.bumpedBy} is taking your spot` : "";
+    } else if (active) {
       heading = "On break";
       tone = "break";
       sub = `since ${fmt(active.start ?? now)}`;
@@ -161,7 +181,7 @@ export default function StaffApp({
   }
 
   const first = (mine?.name ?? profile.name ?? "").trim().split(/\s+/)[0] || "there";
-  const untilAt = !active && !bumpedOut && next ? next.at : null;
+  const untilAt = !active && !bumpedOut && !bumpTime && next ? next.at : null;
 
   return (
     <div className="shell staff">
@@ -208,10 +228,19 @@ export default function StaffApp({
 
       {shift && (
         <>
-          {bumpedOut && (
+          {bumpTime && (
             <div className="staff-bump" role="alert">
               <b>It&rsquo;s time for your bumpout!</b>
-              <span>Head to the iPad and clock out in Sling.{shift.bumpedBy ? ` ${shift.bumpedBy} is taking over.` : ""}</span>
+              <span>Head to the iPad and clock out in Sling, then tap Bump out.</span>
+              <button className="btn big bump-btn" disabled={busy} onClick={pressOut}>
+                Bump out
+              </button>
+            </div>
+          )}
+          {bumpedOut && (
+            <div className="staff-bump done" role="status">
+              <b>You&rsquo;re bumped out</b>
+              <span>Make sure you clocked out in Sling. Thanks for today!</span>
             </div>
           )}
 
@@ -222,7 +251,7 @@ export default function StaffApp({
             {untilAt != null && <em>until {fmt(untilAt)}</em>}
           </section>
 
-          {!active && next && !bumpedOut && (
+          {!active && next && !bumpedOut && !bumpTime && (
             <div className="staff-row">
               <small>Next</small>
               <b>{next.name}</b>
@@ -230,11 +259,11 @@ export default function StaffApp({
             </div>
           )}
 
-          {shift.sentHomeAt != null && !bumpedOut && (
+          {shift.bumpoutAt != null && now < shift.bumpoutAt && !bumpedOut && (
             <div className="staff-row">
               <small>Bumpout</small>
               <b>{shift.bumpedBy ? `${shift.bumpedBy} takes over` : "Clock out"}</b>
-              <span>{fmt(shift.sentHomeAt)}</span>
+              <span>{fmt(shift.bumpoutAt)}</span>
             </div>
           )}
 
@@ -282,7 +311,7 @@ export default function StaffApp({
           </section>
 
           <p className="staff-shift">
-            Your shift {fmt(shift.start)}–{fmt(shift.end)}
+            Your shift {fmt(shift.start)}–{fmt(shift.scheduledEnd ?? shift.end)}
           </p>
         </>
       )}

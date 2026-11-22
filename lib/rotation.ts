@@ -81,6 +81,11 @@ export function autoFill(day: DayState, settings: Settings): Record<string, Cell
       if (!isPresent(s, c, g)) continue;
       const key = cellKey(s.id, c);
       const e = day.cells[key];
+      // once the lead gives someone their bumpout, that is their assignment until they leave
+      if (s.bumpoutAt != null && c + g > s.bumpoutAt) {
+        out[key] = { pos: "other", label: "Bumpout", pinned: false, bump: true };
+        continue;
+      }
       const tie = e?.cover ?? e?.after; // blocks tied to a break only live as long as the break
       if (e && e.pinned && !(tie && !liveBreaks.has(tie))) {
         out[key] = e;

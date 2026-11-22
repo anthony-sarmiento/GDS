@@ -60,6 +60,10 @@ export interface Shift {
   sentHomeAt?: number;
   /** Name of the person who took over (for the board label). */
   bumpedBy?: string;
+  /** When the lead gave them "Bumpout" as their assignment. They stay on until they (or the lead) finish it. */
+  bumpoutAt?: number;
+  /** The clock-out time they were scheduled for, kept when they stay on past it waiting for their bumpout. */
+  scheduledEnd?: number;
 }
 
 /** A block on the board is one of the three positions, or "other" with a label the lead types in. */
@@ -79,6 +83,8 @@ export interface Cell {
   transit?: boolean;
   /** Last column of an assignment the lead gave an end time: nothing carries on after it. */
   ends?: boolean;
+  /** "Bumpout" is their assignment. */
+  bump?: boolean;
 }
 
 /** One bathroom check. Anyone can do one, so `by` is optional. */
