@@ -300,7 +300,6 @@ export default function App() {
 
       <p className="muted no-print" style={{ marginTop: -8, marginBottom: 16 }}>
         {prettyDate(date)}
-        {preview != null && " — previewing the board at a different time"}
       </p>
 
       {showNudge && checks.since != null && (

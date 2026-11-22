@@ -35,7 +35,6 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
     return (
       <div className="card empty">
         <h2>No team on this day yet</h2>
-        <p>Add the team first. GDS then keeps time since the last bathroom check while the store is open.</p>
       </div>
     );
   }
@@ -44,7 +43,6 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
     <div>
       <div className="section-title" style={{ marginTop: 0 }}>
         <h2>Bathroom checks</h2>
-        <p>Recommended every {fmtDuration(interval)}. Anyone can do one, and it is never required.</p>
       </div>
 
       <div className={`card check-card ${state}`}>
@@ -53,7 +51,7 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
             <>
               <span className="check-label">Last check</span>
               <b>{rows.length ? `${fmt(rows[rows.length - 1].check.time)}` : "None yet"}</b>
-              <small>{now == null ? "Open this day live to see the timer." : "The store is not open right now."}</small>
+              <small>Not open right now</small>
             </>
           ) : (
             <>
@@ -126,7 +124,6 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
 
       <div className="section-title">
         <h2>Today&rsquo;s checks</h2>
-        <p>The gap is the time since the check before it.</p>
       </div>
       {rows.length === 0 ? (
         <div className="card muted">No checks logged yet.</div>

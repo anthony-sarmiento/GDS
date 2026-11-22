@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
 import AssignDialog from "./AssignDialog";
-import Steps from "./Steps";
 import { Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
@@ -67,12 +66,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
     return (
       <div className="card empty">
         <h2>Nobody on the board yet</h2>
-        <p>
-          {leads.length
-            ? "Only leads are on today. Leads are not on the board, so add the retail team."
-            : "Start by adding today's team. Here is how a day runs in GDS:"}
-        </p>
-        <Steps />
+        {leads.length > 0 && <p>Only leads are on today. Add the retail team.</p>}
         <button className="btn primary" onClick={goTeam}>
           Add team
         </button>
@@ -93,7 +87,6 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       <div className="section-title">
         <h2>Timeline</h2>
-        <p>Everyone's day at a glance. Tap a row or a name to assign them. People stay where you put them until you move them.</p>
         <span className="spacer" />
         <button
           className="btn ghost"
@@ -127,7 +120,6 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       <div className="section-title">
         <h2>Time at each position</h2>
-        <p>Breaks excluded. The Bar needs the most seats, so it runs highest.</p>
       </div>
       <Fairness ctx={ctx} />
 
@@ -166,7 +158,6 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
       {unassigned.length > 0 && (
         <div className="card needs-pos">
           <strong>Needs a position</strong>
-          <span className="muted">Nobody is placed until you assign them.</span>
           <div className="needs-list">
             {unassigned.map((s) => (
               <span className="needs-person" key={s.id}>
@@ -276,7 +267,6 @@ function BreakQueue({ ctx, onSend }: { ctx: Ctx; onSend: (shiftId: string) => vo
     <div className="section">
       <div className="section-title">
         <h2>Breaks</h2>
-        <p>Tap Start when a planned break begins, and End when they are back.</p>
       </div>
       {owed.length > 0 && (
         <div className="owed no-print">
@@ -288,7 +278,7 @@ function BreakQueue({ ctx, onSend }: { ctx: Ctx; onSend: (shiftId: string) => vo
           ))}
         </div>
       )}
-      {!items.length && <div className="card muted">No breaks are planned or running. Tap a name above to send someone.</div>}
+      {!items.length && <div className="card muted">No breaks planned.</div>}
       <div className="queue">
         {items.map(({ s, b, at }) => {
           const status = breakStatus(b);
@@ -636,20 +626,6 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
         </div>
       )}
       <div className="board-sub">
-      <p className="muted palette-hint" style={{ margin: 0 }}>
-        {brush === "none" &&
-          (compact
-            ? "Tap a row to assign someone from that time, or tap a name."
-            : "Click a row to assign someone from that time, or click a name. Use Paint by hand for exact ranges.")}
-        {brush === "break" &&
-          "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
-        {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
-        {(brush === "front" || brush === "bar" || brush === "dungeon") &&
-          `Drag across a row for an exact range on ${POSITION_LABEL[brush]}. Click a block to repaint all of it.`}
-        {brush === "other" &&
-          "Type a name above, then drag across a row. Custom blocks are not counted as Front, Bar or Dungeon, so coverage will show the gap."}
-        {compact && brush !== "none" && " Tap Pan to scroll the board."}
-      </p>
         <div className="zoom-group" role="group" aria-label="Zoom">
           <span className="muted zoom-label">Zoom</span>
           <button
@@ -796,7 +772,6 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           <div className="tl-row tl-sub">
             <div className="tl-label">
               <strong>Coverage</strong>
-              <small className="hide-compact">People on each position</small>
             </div>
             <div className="tl-lane sub" style={{ width }} />
           </div>
@@ -945,9 +920,6 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card" role="dialog" aria-modal="true" aria-label="Send home" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: 6 }}>Send home</h2>
-        <p className="muted" style={{ marginTop: 0 }}>
-          Send someone home and hand their position to the next person.
-        </p>
         <div className="stack">
           <label className="lbl">
             Sending home

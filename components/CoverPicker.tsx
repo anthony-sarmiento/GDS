@@ -74,7 +74,6 @@ export default function CoverPicker({
         </button>
       </div>
       {options.length === 0 && <p className="muted">Nobody else is free to rotate over for this whole stretch.</p>}
-      {needs && choice === undefined && <p className="muted" style={{ marginBottom: 0 }}>Pick someone, or Nobody, to continue.</p>}
     </div>
   );
 }

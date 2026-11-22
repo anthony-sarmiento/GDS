@@ -18,7 +18,6 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
     return (
       <div className="card empty">
         <h2>No breaks to track yet</h2>
-        <p>Add today&rsquo;s team first. Break lengths come from the shift length.</p>
         <button className="btn primary" onClick={goTeam}>
           Add team
         </button>
@@ -121,7 +120,6 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
         <div className="section">
           <div className="section-title">
             <h2>Break rules</h2>
-            <p>From the GEEK&rsquo;D daily break log. Lengths are editable per break.</p>
           </div>
           <table className="rules">
             <thead>
@@ -213,7 +211,6 @@ function PrintLog({ day, shifts, opener, closer }: { day: DayState; shifts: Shif
           ))}
         </tbody>
       </table>
-      <p className="plog-note">Grey times are planned. Write in the real start and end.</p>
     </div>
   );
 }

@@ -237,11 +237,6 @@ export default function AssignDialog({
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: 6 }}>Assign</h2>
-        <p className="muted" style={{ marginTop: 0 }}>
-          {isBreak
-            ? "Pick who, when and how long. If the position needs a cover, you choose who rotates over."
-            : "Pick who, where, and for how long. They stay there until you move them again."}
-        </p>
 
         <div className="stack">
           <label className="lbl">
@@ -372,10 +367,6 @@ export default function AssignDialog({
             <div className="note warn">
               {POSITION_LABEL[where as Position]} would have {impact.joined} (max {settings.limits[where as Position].max}).
             </div>
-          )}
-          {valid && where === "other" && <div className="note">Custom spots are not counted as Front, Bar or Dungeon. After it they go back to where they were.</div>}
-          {valid && !isBreak && where !== "other" && until < person.end && (
-            <div className="note">After {fmt(until)} {person.name} stays on {POSITION_LABEL[where as Position]} unless you assign something else later.</div>
           )}
         </div>
 
