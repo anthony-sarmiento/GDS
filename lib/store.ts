@@ -1,7 +1,7 @@
 import { AppState, Brk, CellPos, DayState, DEFAULT_LIMITS, DEFAULT_SETTINGS, LeadRole, Position, Settings, Shift } from "./types";
 import { breakKind, defaultBreaks, newBreak, syncShiftBreaks, uid } from "./breaks";
 import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent } from "./rotation";
-import { clearAutoCells, clearCover } from "./cover";
+import { clearAutoCells, clearCover, transitColumns } from "./cover";
 import { normalizeEnd } from "./time";
 
 export const STORAGE_KEY = "gds:v1";
@@ -239,8 +239,18 @@ export function assignRange(
   const shift = day.shifts.find((s) => s.id === shiftId);
   if (!shift || until <= from) return day;
   const g = settings.gridMinutes;
-  const cells = cellsFor(day.shifts, settings).filter((c) => c + g > from && c < until && isPresent(shift, c, g));
-  return paintCells(day, shiftId, cells, pos, label);
+  const cols = cellsFor(day.shifts, settings).filter((c) => c + g > from && c < until && isPresent(shift, c, g));
+  // Moving from one spot to another takes a few minutes, during which they are on neither.
+  const before = cols.length ? day.cells[cellKey(shiftId, cols[0])] : undefined;
+  const moving = !!before && !before.transit && !(before.pos === pos && before.label === (label?.trim() || undefined));
+  const walk = moving ? Math.min(transitColumns(settings), cols.length) : 0;
+  let next = paintCells(day, shiftId, cols.slice(walk), pos, label);
+  if (walk > 0) {
+    const cells = { ...next.cells };
+    for (const c of cols.slice(0, walk)) cells[cellKey(shiftId, c)] = { pos: "other", label: "Moving", pinned: true, transit: true };
+    next = { ...next, cells };
+  }
+  return next;
 }
 
 /** Clear painted columns (they go back to automatic) and un-place any break shown there. */

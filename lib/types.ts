@@ -34,6 +34,8 @@ export interface Brk {
   empInitials: string;
   leadInitials: string;
   notes: string;
+  /** When the person asked to take this break. The lead plans around it where that is realistic. */
+  preferred?: number | null;
 }
 
 export interface Shift {
@@ -71,6 +73,10 @@ export interface Cell {
   pinned: boolean;
   /** This block exists to cover a break (the break's id). It goes away if the break does. */
   cover?: string;
+  /** Where someone goes once this break ends (the break's id). It goes away if the break does. */
+  after?: string;
+  /** Walking between spots: a few minutes when they are on neither. */
+  transit?: boolean;
 }
 
 /** One bathroom check. Anyone can do one, so `by` is optional. */
@@ -109,6 +115,8 @@ export interface Settings {
   maxConcurrentBreaks: number;
   /** A bathroom check is recommended this often (minutes). A reminder only, never required. */
   checkMinutes: number;
+  /** Minutes it takes to walk from one spot to the next or to a break. */
+  transitMinutes: number;
   limits: Record<Position, Limits>;
 }
 
@@ -131,5 +139,6 @@ export const DEFAULT_SETTINGS: Settings = {
   anchor: 10 * 60,
   maxConcurrentBreaks: 1,
   checkMinutes: 90,
+  transitMinutes: 5,
   limits: DEFAULT_LIMITS,
 };

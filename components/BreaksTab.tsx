@@ -1,6 +1,7 @@
 "use client";
 
 import { Ctx, FIRST_NAME } from "./ctx";
+import BreakPlanner from "./BreakPlanner";
 import { runBreakChange } from "./breakFlow";
 import { Brk, DayState, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { SHIFT_RULES, breakStatus, effectiveStart } from "@/lib/breaks";
@@ -62,6 +63,8 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
             Print log
           </button>
         </div>
+
+        <BreakPlanner ctx={ctx} />
 
         <div className="log-head card" style={{ marginTop: 16 }}>
           <label className="lbl">

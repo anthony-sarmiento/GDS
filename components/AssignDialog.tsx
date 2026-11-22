@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ctx } from "./ctx";
 import CoverPicker from "./CoverPicker";
+import RotateDialog from "./RotateDialog";
 import { CellPos, Position, POSITION_LABEL } from "@/lib/types";
 import { cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
 import { analyzeCover, applyBreakChange, coverOptions } from "@/lib/cover";
@@ -14,6 +15,20 @@ import { breakKind, breaksOwed, KIND_LABEL, onLog } from "@/lib/breaks";
 const round5 = (t: number) => Math.round(t / 5) * 5;
 
 type Where = CellPos | "break";
+
+/** Assign one person, or rotate several at once. */
+export function ModeSwitch({ mode, onChange }: { mode: "one" | "rotate"; onChange: (m: "one" | "rotate") => void }) {
+  return (
+    <div className="seg" role="group" aria-label="Kind of assignment">
+      <button type="button" aria-pressed={mode === "one"} onClick={() => onChange("one")}>
+        One person
+      </button>
+      <button type="button" aria-pressed={mode === "rotate"} onClick={() => onChange("rotate")}>
+        Rotation
+      </button>
+    </div>
+  );
+}
 
 const WHERE: { id: Where; label: string; cls: string }[] = [
   { id: "front", label: "Front", cls: "pos-front" },
@@ -50,6 +65,7 @@ export default function AssignDialog({
   const [who, setWho] = useState(firstShift?.id ?? "");
   const person = crew.find((s) => s.id === who) ?? firstShift;
 
+  const [mode, setMode] = useState<"one" | "rotate">("one");
   const [where, setWhere] = useState<Where>(startWhere ?? "front");
   const [label, setLabel] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -125,6 +141,8 @@ export default function AssignDialog({
   const showPicker = valid && position != null && (needsCover || isBreak);
   const effective = coverChoice === undefined && !needsCover ? null : coverChoice;
   const blocked = showPicker && needsCover && effective === undefined;
+
+  if (mode === "rotate") return <RotateDialog ctx={ctx} onClose={onClose} header={<ModeSwitch mode="rotate" onChange={setMode} />} />;
 
   if (!person) {
     return (
@@ -215,6 +233,8 @@ export default function AssignDialog({
       return { cls: "", text: `${person.name}'s ${KIND_LABEL[kind]} break is already placed, so this moves it.` };
     return { cls: "warn", text: `${person.name}'s log has no ${KIND_LABEL[kind]} break left, so this counts as an extra break.` };
   })();
+  // the time they asked for, if they asked
+  const asked = person.breaks.filter((b) => b.start == null && b.preferred != null).sort((x, y) => x.preferred! - y.preferred!)[0]?.preferred;
   const owedText = (["short", "long"] as const)
     .filter((k) => owed[k].unplaced + owed[k].placed > 0)
     .map((k) => `${KIND_LABEL[k]} × ${owed[k].unplaced + owed[k].placed}`)
@@ -236,7 +256,8 @@ export default function AssignDialog({
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 6 }}>Assign</h2>
+        <h2 style={{ marginBottom: 10 }}>Assign</h2>
+        <ModeSwitch mode="one" onChange={setMode} />
 
         <div className="stack">
           <label className="lbl">
@@ -294,6 +315,14 @@ export default function AssignDialog({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {isBreak && asked != null && (
+            <div className="chip-row">
+              <button type="button" className="btn small" aria-pressed={from === asked} onClick={() => changeFrom(asked)}>
+                Asked for {fmt(asked)}
+              </button>
             </div>
           )}
 

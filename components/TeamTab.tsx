@@ -298,6 +298,34 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
           />
         </label>
         <label className="lbl">
+          Walking between spots
+          <select
+            className="field"
+            value={settings.transitMinutes}
+            onChange={(e) => setSettings({ transitMinutes: Number(e.target.value) })}
+          >
+            {[0, 5, 10].map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? "No time" : `${m} minutes`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="lbl">
+          Most people on break at once
+          <select
+            className="field"
+            value={settings.maxConcurrentBreaks}
+            onChange={(e) => setSettings({ maxConcurrentBreaks: Number(e.target.value) })}
+          >
+            {[1, 2, 3].map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="lbl">
           Remind about bathroom checks every
           <select
             className="field"

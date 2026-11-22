@@ -45,6 +45,15 @@ Someone has to be on a position while its holder is on break, and **you choose w
 
 When you press **Start** on a break, place one with the Break brush, or send someone on **Break** from Assign, GDS asks **who rotates over**. It lists everyone free for the whole break with what moving them does ("Front stays staffed", "Bar drops to 1 (needs 2)", "Leaves Dungeon empty"), marks its best guess as **Suggested** without selecting it, and has a **Nobody** choice. When the position would be left short you have to pick someone (or Nobody) before it goes ahead. Your pick is pinned onto the position for the length of the break and removed again if the break is moved or erased. Moving someone with Assign asks the same question about the position they leave. Leads and people on a custom block have no position to cover, so they are never asked. Typing times into the break log re-covers quietly and only asks if a position would be left empty.
 
+### A day in GDS
+
+1. **Before anyone arrives** the lead adds the team and gives everyone a starting position (Board → Assign, default "rest of shift"). When staff walk in they see where they start.
+2. **While they get set up** the lead asks when each person would like their break and types it in on the **Breaks** tab (*Break times they asked for*). **Plan breaks** lays the day out around those times and shows the result first: who gets their exact time, who had to move and by how much, who covers, and where a position runs short. Nothing reaches the board until you press *Put on the board*. Breaks nobody asked for are left alone.
+3. **During the day** a person stays on their position until their break. A break is also a rotation: when you pick who covers, that person stays where they went and the person on break takes the cover's old spot when they come back. Taking the break off the board undoes it.
+4. **Assign** has two modes. *One person* moves a single person (sometimes that is all an assignment is). *Rotation* moves everyone on the floor at a time at once: each person goes to a different position or on break, starting from a suggestion that keeps the headcount the same. The dialog shows the headcount per position afterwards.
+5. **Walking takes a few minutes.** A move or cover shows the person as *Moving* for the first few minutes (5 by default, 0 / 5 / 10 in Team → Settings). A position that is short only because someone is on the way shows in blue as "Someone is on the way" instead of red.
+6. **Bathroom checks** are logged on the Checks tab, and the reminder banner shows when one is overdue. The lead is the one who makes sure they happen.
+
 ### Staffing
 
 Front 1–2, Bar 2–3, Dungeon exactly 1 by default (editable in Team → Staffing). The board flags a position that is short, empty or over the maximum. It never moves anyone to fix it.

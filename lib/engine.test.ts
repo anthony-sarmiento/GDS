@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planBreaks, requiredBreaks } from "./breaks";
-import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, isPresent, positionMinutes, staffAt } from "./rotation";
+import { autoFill, breakAtCell, breakImpact, cellKey, cellsFor, coverageRuns, isPresent, positionMinutes, staffAt } from "./rotation";
 import { addShift, assignRange, bumpOut, emptyDay, eraseCells, initialState, paintCells, placeBreak, refresh } from "./store";
 import { analyzeCover, applyBreakChange, assignCover, suggestMover } from "./cover";
 import { DayState, DEFAULT_SETTINGS, Position, roleName } from "./types";
@@ -100,7 +100,7 @@ describe("nobody is given a position until the lead assigns it", () => {
     expect(day.cells[cellKey(a.id, h(14, 5))]).toEqual({ pos: "dungeon", pinned: false });
   });
 
-  it("someone who covers a break goes back to their own position afterwards", () => {
+  it("someone who covers a break stays where they went, and the person on break takes their old spot", () => {
     let day = team();
     const [a, b] = day.shifts;
     day = assignRange(day, S, a.id, h(11), h(12), "dungeon");
@@ -110,8 +110,10 @@ describe("nobody is given a position until the lead assigns it", () => {
     day = assignCover(day, S, a.id, brk.id, b.id).day;
     day = refresh(day, initialState());
     expect(day.cells[cellKey(b.id, h(11, 35))]).toMatchObject({ pos: "dungeon", cover: brk.id });
-    expect(day.cells[cellKey(b.id, h(11, 50))]?.pos).toBe("front");
-    expect(day.cells[cellKey(b.id, h(13))]?.pos).toBe("front");
+    expect(day.cells[cellKey(b.id, h(11, 50))]?.pos).toBe("dungeon");
+    expect(day.cells[cellKey(b.id, h(13))]?.pos).toBe("dungeon");
+    expect(day.cells[cellKey(a.id, h(11, 50))]?.pos).toBe("front");
+    expect(day.cells[cellKey(a.id, h(13))]?.pos).toBe("front");
   });
 
   it("someone set to stay at a position is there without being assigned", () => {
@@ -327,7 +329,9 @@ describe("sending someone on break with the cover you picked", () => {
     let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, c, 20), picked.shift.id);
     next = { ...next, cells: autoFill(next, S) }; // the pass that follows in the app
 
-    for (const t of [h(14), h(14, 10), h(14, 15)]) {
+    // the first minutes are spent walking over
+    expect(next.cells[cellKey(picked.shift.id, h(14))]).toMatchObject({ pos: "other", label: "Moving", transit: true });
+    for (const t of [h(14, 5), h(14, 10), h(14, 15)]) {
       expect(next.cells[cellKey(picked.shift.id, t)]).toMatchObject({ pos: "dungeon", pinned: true });
       expect(staffAt(next, S, t).dungeon.map((s) => s.id)).toEqual([picked.shift.id]);
     }
@@ -407,7 +411,9 @@ describe("pushed assignments", () => {
     const cam = day.shifts.find((s) => s.name === "Cam")!;
     const before = { ...day.cells };
     day = assignRange(day, S, cam.id, h(14, 15), h(15, 5), "bar");
-    for (const t of [h(14, 15), h(14, 30), h(15)]) expect(day.cells[cellKey(cam.id, t)]).toEqual({ pos: "bar", pinned: true });
+    // the first column is the walk from the Dungeon to the Bar
+    expect(day.cells[cellKey(cam.id, h(14, 15))]).toEqual({ pos: "other", label: "Moving", pinned: true, transit: true });
+    for (const t of [h(14, 20), h(14, 30), h(15)]) expect(day.cells[cellKey(cam.id, t)]).toEqual({ pos: "bar", pinned: true });
     expect(day.cells[cellKey(cam.id, h(14, 10))]).toEqual(before[cellKey(cam.id, h(14, 10))]);
     expect(day.cells[cellKey(cam.id, h(15, 5))]).toEqual(before[cellKey(cam.id, h(15, 5))]);
   });
@@ -504,7 +510,8 @@ describe("edges of a shift", () => {
     const dee = day.shifts.find((s) => s.name === "Dee")!; // 5:00 PM start
     day = assignRange(day, S, dee.id, h(16, 30), h(17, 30), "bar");
     expect(day.cells[cellKey(dee.id, h(16, 30))]).toBeUndefined();
-    expect(day.cells[cellKey(dee.id, h(17))]).toMatchObject({ pos: "bar", pinned: true });
+    expect(day.cells[cellKey(dee.id, h(17))]).toMatchObject({ transit: true }); // Front to Bar: a short walk
+    expect(day.cells[cellKey(dee.id, h(17, 5))]).toMatchObject({ pos: "bar", pinned: true });
   });
 });
 
@@ -545,5 +552,77 @@ describe("bump out", () => {
     const pos = day.cells[cellKey(bri.id, h(16, 55))].pos;
     day = bumpOut(day, S, bri.id, eli.id, h(17));
     expect(day.cells[cellKey(eli.id, h(17))]).toEqual({ pos, pinned: true });
+  });
+});
+
+describe("a break is a rotation", () => {
+  function holderOnDungeon() {
+    const day = quietDay();
+    const c = h(14);
+    const holder = day.shifts.find((x) => !x.role && day.cells[cellKey(x.id, c)]?.pos === "dungeon" && x.start <= c && c < x.end)!;
+    const probe = placeBreak(day, holder.id, c, 20);
+    const a = analyzeCover(probe.day, S, holder.id, probe.breakId!);
+    return { day, holder, breakId: probe.breakId!, a };
+  }
+
+  it("after the break the holder takes the cover's old spot and the cover stays put", () => {
+    const { day, holder, a } = holderOnDungeon();
+    const picked = a.options.find((o) => o.from === "bar")!;
+    let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, h(14), 20), picked.shift.id);
+    next = { ...next, cells: autoFill(next, S) };
+    // cover returns to nothing: they stay on the Dungeon, and the holder goes where the cover came from
+    for (const t of [h(14, 25), h(15), h(16, 30)]) {
+      expect(next.cells[cellKey(picked.shift.id, t)]?.pos).toBe("dungeon");
+      expect(next.cells[cellKey(holder.id, t)]?.pos).toBe("bar");
+    }
+    // before the break nothing changed
+    expect(next.cells[cellKey(holder.id, h(13, 55))]?.pos).toBe("dungeon");
+    expect(next.cells[cellKey(picked.shift.id, h(13, 55))]?.pos).toBe("bar");
+  });
+
+  it("goes back to the original spot with nobody covering", () => {
+    const { day, holder } = holderOnDungeon();
+    let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, h(14), 20), null);
+    next = { ...next, cells: autoFill(next, S) };
+    expect(next.cells[cellKey(holder.id, h(15))]?.pos).toBe("dungeon");
+  });
+
+  it("is undone when the break is taken off the board", () => {
+    const { day, holder, a } = holderOnDungeon();
+    const picked = a.options[0];
+    let next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, h(14), 20), picked.shift.id);
+    next = eraseCells(next, S, holder.id, [h(14), h(14, 5), h(14, 10), h(14, 15)]);
+    next = { ...next, cells: autoFill(next, S) };
+    expect(Object.values(next.cells).some((c) => c.after || c.cover)).toBe(false);
+    expect(next.cells[cellKey(holder.id, h(15))]?.pos).toBe("dungeon");
+  });
+});
+
+describe("walking between spots", () => {
+  it("is not treated as a shortage while someone is on the way", () => {
+    const day = quietDay();
+    const c = h(14);
+    const holder = day.shifts.find((x) => !x.role && day.cells[cellKey(x.id, c)]?.pos === "dungeon" && x.start <= c && c < x.end)!;
+    const probe = placeBreak(day, holder.id, c, 20);
+    const picked = analyzeCover(probe.day, S, holder.id, probe.breakId!).options.find((o) => o.from === "bar")!;
+    const next = applyBreakChange(day, S, (d) => placeBreak(d, holder.id, c, 20), picked.shift.id);
+    const runs = coverageRuns(next, S, "bar");
+    const during = runs.find((r) => r.start <= h(14) && h(14) < r.end)!;
+    expect(during.status).toBe("transit");
+    expect(runs.find((r) => r.start <= h(14, 10) && h(14, 10) < r.end)!.status).not.toBe("transit");
+  });
+
+  it("is skipped when the setting is zero", () => {
+    const day = quietDay();
+    const cam = day.shifts.find((x) => x.name === "Cam")!;
+    const moved = assignRange(day, { ...S, transitMinutes: 0 }, cam.id, h(14, 15), h(15), "bar");
+    expect(moved.cells[cellKey(cam.id, h(14, 15))]).toEqual({ pos: "bar", pinned: true });
+  });
+
+  it("is not added for someone's very first position", () => {
+    let day = emptyDay("2026-11-17");
+    day = addShift(day, { name: "A", start: h(11), end: h(17), lock: null, floater: false });
+    const placed = assignRange(day, S, day.shifts[0].id, h(11), h(17), "front");
+    expect(placed.cells[cellKey(day.shifts[0].id, h(11))]).toEqual({ pos: "front", pinned: true });
   });
 });

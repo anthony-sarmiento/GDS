@@ -190,8 +190,10 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
             const limit = settings.limits[p];
             const status = staffStatus(working.length, limit);
             const cover = status === "short" || status === "open" ? suggestCover(floor, settings, p) : null;
+            // someone is walking between spots right now, so a gap is only for a moment
+            const walking = floor.elsewhere.some((x) => x.label === "Moving");
             return (
-              <div key={p} className={`pos-card pos-${p} ${status === "open" ? "open" : status === "short" ? "short" : ""}`}>
+              <div key={p} className={`pos-card pos-${p} ${walking && (status === "open" || status === "short") ? "walking" : status === "open" ? "open" : status === "short" ? "short" : ""}`}>
                 <header>
                   <h3>{POSITION_LABEL[p]}</h3>
                   <span className="muted">
@@ -219,10 +221,10 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                 ))}
                 {(status === "open" || status === "short") && (
                   <div className="open-label" style={{ marginTop: 10 }}>
-                    {status === "open" ? "Nobody here" : `Short by ${limit.min - working.length}`}
+                    {walking ? "Someone is on the way" : status === "open" ? "Nobody here" : `Short by ${limit.min - working.length}`}
                   </div>
                 )}
-                {cover && (
+                {cover && !walking && (
                   <div className="person cover">
                     Move {cover.shift.name}
                     <small>from {POSITION_LABEL[cover.from]}</small>

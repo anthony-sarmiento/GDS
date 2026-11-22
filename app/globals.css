@@ -2559,3 +2559,170 @@ button,
     text-align: center;
   }
 }
+
+/* ---------- break preferences, plan, rotation, walking ---------- */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.seg button {
+  background: var(--navy-800);
+  border: none;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seg button[aria-pressed="true"] {
+  background: var(--green);
+  color: var(--navy-900);
+}
+
+.pref-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.pref-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 90px 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.pref-row:last-child {
+  border-bottom: none;
+}
+
+.pref-name small {
+  margin-left: 8px;
+  color: var(--muted);
+}
+
+.pref-placed {
+  color: var(--green);
+  font-size: 0.85rem;
+}
+
+.pref-placed.off {
+  color: var(--warn);
+}
+
+.plan-list {
+  display: grid;
+  gap: 6px;
+}
+
+.plan-item {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 2px 10px;
+  background: var(--navy-700);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.plan-item.moved {
+  border-left: 3px solid var(--warn);
+}
+
+.plan-item small {
+  color: var(--warn);
+}
+
+.plan-cover {
+  grid-column: 2;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.plan-cover.warn {
+  color: var(--warn);
+}
+
+.rot-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.rot-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 80px 16px minmax(0, 1.4fr);
+  align-items: center;
+  gap: 8px;
+  background: var(--navy-700);
+  border-left: 4px solid var(--pos);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.rot-from {
+  color: var(--pos);
+  font-weight: 600;
+}
+
+.rot-row .field {
+  width: 100%;
+}
+
+.rot-counts {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rot-count {
+  flex: 1;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--pos);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 0.85rem;
+}
+
+.rot-count b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.2rem;
+  margin-left: 4px;
+}
+
+.rot-count.warn {
+  background: rgba(255, 194, 71, 0.14);
+}
+
+.rot-count.bad {
+  background: rgba(255, 92, 108, 0.16);
+}
+
+.cov-blk.transit {
+  background: rgba(92, 200, 255, 0.18);
+  color: var(--break);
+}
+
+.pos-card.walking {
+  border-color: var(--break);
+  border-top-color: var(--break);
+  background: rgba(92, 200, 255, 0.06);
+}
+
+.pos-card.walking .open-label {
+  color: var(--break);
+}
+
+@media (max-width: 700px) {
+  .pref-row {
+    grid-template-columns: minmax(0, 1fr) 62px 130px;
+  }
+  .pref-placed {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,12 +1,49 @@
 import { DayState, Position, Settings, Shift } from "./types";
 import { breakAtCell, breakSpan, cellKey, cellsFor, isPresent, rotating } from "./rotation";
 
+/**
+ * The columns that change when `who` takes a new spot from `from` on: the rest of the time they were due
+ * to stay on `oldPos`, up to the next thing the lead set for them. `null` means the lead already set
+ * something different for the very first moment, so nothing should change.
+ */
+export function afterRun(
+  shifts: Shift[],
+  settings: Settings,
+  cells: DayState["cells"],
+  who: Shift,
+  from: number,
+  oldPos: Position,
+): string[] | null {
+  const g = settings.gridMinutes;
+  const all = cellsFor(shifts, settings);
+  const start = all.findIndex((c) => c <= from && from < c + g);
+  if (start < 0) return [];
+  const keys: string[] = [];
+  for (const c of all.slice(start)) {
+    if (!isPresent(who, c, g)) continue;
+    const k = cellKey(who.id, c);
+    const e = cells[k];
+    if (e && e.pinned && !e.cover && !e.after && e.pos !== oldPos) {
+      if (keys.length === 0) return null;
+      break;
+    }
+    if (!e || !e.pinned) keys.push(k); // empty, or carried on from earlier: it becomes part of the change
+    else if (!e.cover && !e.after) keys.push(k);
+  }
+  return keys;
+}
+
+/** How many board columns the walk between two spots takes. */
+export const transitColumns = (settings: Settings): number =>
+  settings.transitMinutes > 0 ? Math.ceil(settings.transitMinutes / settings.gridMinutes) : 0;
+
 /** Remove the blocks that were added to cover this break. */
 export function clearCover(day: DayState, breakId: string): DayState {
-  if (!Object.values(day.cells).some((c) => c.cover === breakId)) return day;
+  const tied = (c: { cover?: string; after?: string }) => c.cover === breakId || c.after === breakId;
+  if (!Object.values(day.cells).some(tied)) return day;
   return {
     ...day,
-    cells: Object.fromEntries(Object.entries(day.cells).filter(([, c]) => c.cover !== breakId)),
+    cells: Object.fromEntries(Object.entries(day.cells).filter(([, c]) => !tied(c))),
   };
 }
 
@@ -171,8 +208,26 @@ export function assignCover(
 
   const g = settings.gridMinutes;
   const cells = { ...day.cells };
+  const walk = transitColumns(settings);
+  let i = 0;
   for (const c of a.spanCells) {
-    if (isPresent(picked.shift, c, g)) cells[cellKey(picked.shift.id, c)] = { pos: a.position, pinned: true, cover: breakId };
+    if (!isPresent(picked.shift, c, g)) continue;
+    // the first few minutes are spent walking over; they are on neither spot
+    cells[cellKey(picked.shift.id, c)] =
+      i < walk
+        ? { pos: "other", label: "Moving", pinned: true, cover: breakId, transit: true }
+        : { pos: a.position, pinned: true, cover: breakId };
+    i += 1;
+  }
+
+  // A break is also a rotation: when it ends the holder takes the cover's old spot and the cover stays
+  // where they are. If the lead already set something for that moment, no swap happens.
+  const holder = day.shifts.find((s) => s.id === shiftId)!;
+  const mine = afterRun(day.shifts, settings, cells, holder, a.span[1], a.position);
+  const theirs = afterRun(day.shifts, settings, cells, picked.shift, a.span[1], picked.from);
+  if (mine && theirs && mine.length && theirs.length) {
+    for (const k of mine) cells[k] = { pos: picked.from, pinned: true, after: breakId };
+    for (const k of theirs) cells[k] = { pos: a.position, pinned: true, after: breakId };
   }
   return { ...base, day: { ...day, cells }, status: "covered", cover: picked.shift, from: picked.from };
 }

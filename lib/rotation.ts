@@ -81,7 +81,8 @@ export function autoFill(day: DayState, settings: Settings): Record<string, Cell
       if (!isPresent(s, c, g)) continue;
       const key = cellKey(s.id, c);
       const e = day.cells[key];
-      if (e && e.pinned && !(e.cover && !liveBreaks.has(e.cover))) {
+      const tie = e?.cover ?? e?.after; // blocks tied to a break only live as long as the break
+      if (e && e.pinned && !(tie && !liveBreaks.has(tie))) {
         out[key] = e;
         if (e.pos !== "other" && !e.cover) last.set(s.id, e.pos);
         continue;
@@ -201,12 +202,14 @@ export interface BreakImpact {
 export function breakImpact(day: DayState, settings: Settings, shift: Shift, t: number): BreakImpact {
   if (shift.role) return { position: null, remaining: 0, min: 0, status: "ok" };
   const g = settings.gridMinutes;
+  // judged once the walk to cover the position is over
   const c = cellAt(cellsFor(day.shifts, settings), g, t);
+  const cAfter = cellAt(cellsFor(day.shifts, settings), g, t + settings.transitMinutes) ?? c;
   const cell = c == null ? undefined : day.cells[cellKey(shift.id, c)];
   if (c == null || !cell) return { position: null, remaining: 0, min: 0, status: "unknown" };
   if (cell.pos === "other") return { position: null, remaining: 0, min: 0, status: "ok" };
   const position = cell.pos;
-  const remaining = staffAt(day, settings, c)[position].filter((s) => s.id !== shift.id).length;
+  const remaining = staffAt(day, settings, cAfter ?? c)[position].filter((s) => s.id !== shift.id).length;
   const { min } = settings.limits[position];
   return { position, remaining, min, status: remaining >= min ? "ok" : staffStatus(remaining, settings.limits[position]) };
 }
@@ -245,7 +248,8 @@ export interface CoverageRun {
   start: number;
   end: number;
   count: number;
-  status: StaffStatus | "none";
+  /** "transit" = short only because someone is walking over right now. */
+  status: StaffStatus | "none" | "transit";
 }
 
 /** How many people are on a position over the day, merged into runs of the same count. */
@@ -256,7 +260,9 @@ export function coverageRuns(day: DayState, settings: Settings, pos: Position): 
   for (const c of cellsFor(day.shifts, settings)) {
     const anyone = crew.some((s) => isPresent(s, c, g));
     const count = staffAt(day, settings, c)[pos].length;
-    const status: CoverageRun["status"] = anyone ? staffStatus(count, settings.limits[pos]) : "none";
+    const walking = crew.some((s) => isPresent(s, c, g) && day.cells[cellKey(s.id, c)]?.transit);
+    let status: CoverageRun["status"] = anyone ? staffStatus(count, settings.limits[pos]) : "none";
+    if (walking && (status === "open" || status === "short")) status = "transit";
     const last = out[out.length - 1];
     if (last && last.count === count && last.status === status && last.end === c) last.end = c + g;
     else out.push({ start: c, end: c + g, count, status });
