@@ -3017,3 +3017,278 @@ button.chain-sum {
 .sync.error {
   color: #ffb347;
 }
+
+/* ---------- avatars and the team list ---------- */
+.avatar {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--navy-700);
+  border: 2px solid var(--line);
+}
+
+.avatar.init {
+  display: inline-grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.team-scroll {
+  max-height: 380px;
+  overflow-y: auto;
+  margin: -4px;
+  padding: 4px;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: 36px minmax(150px, 1.5fr) 104px 104px minmax(150px, 1fr) minmax(90px, auto) 34px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.team-row:last-child {
+  border-bottom: none;
+}
+
+.team-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.team-name small {
+  font-size: 0.72rem;
+}
+
+.team-row .field {
+  height: 36px;
+  padding: 0 8px;
+}
+
+.team-row .mini {
+  display: grid;
+  gap: 1px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-row .team-x {
+  padding: 0;
+  width: 34px;
+  height: 34px;
+}
+
+@media (max-width: 860px) {
+  .team-row {
+    grid-template-columns: 36px minmax(0, 1fr) 1fr 1fr 34px;
+  }
+  .team-row .team-works {
+    grid-column: 2 / 4;
+  }
+  .team-row .team-extra {
+    grid-column: 4 / 6;
+  }
+}
+
+/* ---------- retail screen, built for a phone ---------- */
+.shell.staff {
+  max-width: 520px;
+  padding: 14px 16px calc(28px + env(safe-area-inset-bottom));
+}
+
+.staff-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.staff-logo {
+  width: 96px;
+  height: auto;
+}
+
+.staff-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.staff-hello {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0 16px;
+}
+
+.staff-hello b {
+  display: block;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.staff-hello span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.staff-hero {
+  --tone: var(--muted);
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 230px;
+  padding: 28px 20px;
+  margin-bottom: 12px;
+  border-radius: 26px;
+  text-align: center;
+  border: 2px solid color-mix(in srgb, var(--tone) 70%, transparent);
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--tone) 24%, transparent), transparent 70%),
+    var(--navy-800);
+  box-shadow: 0 0 34px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+
+.staff-hero small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+.staff-hero strong {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: clamp(2.8rem, 15vw, 4.4rem);
+  line-height: 1;
+  color: var(--tone);
+  overflow-wrap: anywhere;
+}
+
+.staff-hero span {
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.staff-hero em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.staff-hero.tone-front { --tone: var(--green); }
+.staff-hero.tone-bar { --tone: #f5a623; }
+.staff-hero.tone-dungeon { --tone: #a98bff; }
+.staff-hero.tone-other { --tone: #ff7ad9; }
+.staff-hero.tone-break,
+.staff-hero.tone-moving { --tone: var(--break); }
+.staff-hero.tone-none strong { font-size: 2rem; }
+
+.staff-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  background: var(--navy-800);
+  border: 1px solid var(--line);
+}
+
+.staff-row small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.staff-row b {
+  font-size: 1.1rem;
+}
+
+.staff-row span {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.staff-breaks {
+  display: grid;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 20px;
+  background: var(--navy-800);
+  border: 1px solid var(--line);
+}
+
+.staff-breaks h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.staff-break {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-break b {
+  font-size: 1.1rem;
+}
+
+.staff-break .btn.big {
+  width: 100%;
+  min-height: 58px;
+  font-size: 1.15rem;
+  border-radius: 14px;
+}
+
+.staff-break.done {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.staff-break.done .check {
+  color: var(--green);
+  font-size: 1.3rem;
+}
+
+.staff-bump {
+  padding: 18px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+  font-size: 1.05rem;
+}
+
+.staff-bump b {
+  font-size: 1.3rem;
+}
+
+.staff-empty {
+  text-align: center;
+  padding: 28px 18px;
+}
+
+.staff-shift {
+  text-align: center;
+  color: var(--muted);
+  margin: 18px 0 0;
+}
+
+.staff-break {
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.staff-break.done {
+  grid-template-columns: none;
+}

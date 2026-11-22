@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import App from "./App";
 import StaffApp from "./StaffApp";
-import { loadProfile } from "@/lib/cloud";
+import { loadProfile, saveMyAvatar } from "@/lib/cloud";
 import { isLeadSide, Profile, Role, supabase } from "@/lib/supabase";
 
 type Phase = { kind: "loading" } | { kind: "out"; error?: string } | { kind: "in"; profile: Profile; local: boolean };
@@ -52,7 +52,10 @@ export default function Root() {
       setPhase({ kind: "out", error: "Signed in, but your account could not be loaded. Has the database setup been run?" });
       return;
     }
-    setPhase({ kind: "in", profile, local: false });
+    // the Google picture comes with the sign-in; keep a copy on the profile so leads can see it too
+    const picture = (user.user_metadata?.avatar_url as string | undefined) ?? (user.user_metadata?.picture as string | undefined) ?? null;
+    if (picture && picture !== profile.avatar_url) void saveMyAvatar(picture);
+    setPhase({ kind: "in", profile: { ...profile, avatar_url: picture ?? profile.avatar_url ?? null }, local: false });
   }, []);
 
   useEffect(() => {

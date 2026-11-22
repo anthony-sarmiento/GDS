@@ -7,6 +7,7 @@ import { Profile, ROLE_LABEL } from "@/lib/supabase";
 import {
   deleteMember as cloudDeleteMember,
   listenForEvents,
+  loadAccounts,
   loadDay,
   loadOpenEvents,
   loadRecentDays,
@@ -67,6 +68,7 @@ export default function App({
   const [cloudReady, setCloudReady] = useState(!cloud);
   const [sync, setSync] = useState<"saved" | "saving" | "error">("saved");
   const isAdmin = cloud && profile.role === "owner";
+  const [avatars, setAvatars] = useState<Record<string, string>>({});
   const savedDays = useRef<Record<string, string>>({});
   const savedSettings = useRef<string>("");
 
@@ -112,6 +114,22 @@ export default function App({
       cancelled = true;
     };
   }, [hydrated, cloud]);
+
+  // faces for the names on the board
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    let cancelled = false;
+    void loadAccounts().then((rows) => {
+      if (cancelled) return;
+      const map: Record<string, string> = {};
+      for (const r of rows) if (r.avatar_url) map[r.email.trim().toLowerCase()] = r.avatar_url;
+      if (profile.avatar_url) map[profile.email.trim().toLowerCase()] = profile.avatar_url;
+      setAvatars(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cloud, cloudReady, profile.avatar_url, profile.email]);
 
   // a day that is not loaded yet (an older date picked from the date box or History)
   useEffect(() => {
@@ -396,10 +414,11 @@ export default function App({
       askCover: setCoverPrompt,
       cloud,
       team: state.team ?? [],
+      avatars,
       saveMember,
       removeMember,
     }),
-    [state, day, now, live, preview, mutate, setSettings, remember, flash, cloud, saveMember, removeMember],
+    [state, day, now, live, preview, mutate, setSettings, remember, flash, cloud, avatars, saveMember, removeMember],
   );
 
   // gentle reminder when it has been a while since the last bathroom check; "Later" hides it for 30 minutes

@@ -531,7 +531,7 @@ export default function AssignDialog({
                       ))}
                     </select>
                   ) : (
-                    <div className="note warn">Nobody else is on {r.prev ? POSITION_LABEL[r.prev] : "that spot"} at {fmt(from)}.</div>
+                    <div className="muted">No one to move from {r.prev ? POSITION_LABEL[r.prev] : "that spot"} at {fmt(from)}.</div>
                   )}
                   <div className="step-head">Where are they going?</div>
                   <div className="where-grid" role="group" aria-label="Where they are going">
@@ -598,7 +598,7 @@ export default function AssignDialog({
           </div>
         )}
 
-        {valid && chainInfo.tailPos && chain.every((st) => st.who && st.where) && (
+        {valid && chainInfo.tailPos && chain.every((st) => st.who && st.where) && peopleAt(day, settings, chainInfo.tailPos, from, chainInfo.skip).length > 0 && (
           <button type="button" className="btn add-rot" onClick={addStep}>
             + Add rotation
           </button>

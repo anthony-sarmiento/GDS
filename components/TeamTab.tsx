@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Avatar from "./Avatar";
 import { Ctx } from "./ctx";
 import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
@@ -70,6 +71,15 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
   ).sort();
 
   const previous = lastTeamBefore(state, day.date);
+
+  // the picture of whoever has signed in with one of the emails saved for this name
+  const faceOf = (n: string): string | undefined => {
+    const m = ctx.team.find((x) => x.name.trim().toLowerCase() === n.trim().toLowerCase());
+    return (m?.email ?? "")
+      .split(",")
+      .map((e) => ctx.avatars[e.trim().toLowerCase()])
+      .find(Boolean);
+  };
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -186,52 +196,57 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
         )}
       </div>
 
-      <div className="card">
+      <div className="card team-card">
         {!day.shifts.length && (
           <div className="empty" style={{ padding: "24px 8px" }}>
             Nobody on today yet.
           </div>
         )}
-        {day.shifts.map((s) => (
-          <div className="shift-row" key={s.id}>
-            <label className="lbl">
-              Name
-              <input
-                className="field"
-                list="gds-names"
-                value={s.name}
-                onChange={(e) => mutate((d) => updateShift(d, s.id, { name: e.target.value }))}
-                onBlur={(e) => remember(e.target.value)}
-              />
-            </label>
-            <label className="lbl">
-              In
-              <input
-                type="time"
-                className="field"
-                value={toInput(s.start)}
-                onChange={(e) => {
-                  const v = fromInput(e.target.value);
-                  if (v != null) mutate((d) => updateShift(d, s.id, { start: v }), { auto: true });
-                }}
-              />
-            </label>
-            <label className="lbl">
-              Out
-              <input
-                type="time"
-                className="field"
-                value={toInput(s.end)}
-                onChange={(e) => {
-                  const v = fromInput(e.target.value);
-                  if (v != null) mutate((d) => updateShift(d, s.id, { end: normalizeEnd(s.start, v) }), { auto: true });
-                }}
-              />
-            </label>
-            <label className="lbl">
-              Works as
+        <div className="team-scroll">
+          {day.shifts.map((s) => (
+            <div className="team-row" key={s.id}>
+              <Avatar url={faceOf(s.name)} name={s.name} size={36} />
+              <div className="team-name">
+                <input
+                  className="field"
+                  list="gds-names"
+                  aria-label="Name"
+                  value={s.name}
+                  onChange={(e) => mutate((d) => updateShift(d, s.id, { name: e.target.value }))}
+                  onBlur={(e) => remember(e.target.value)}
+                />
+                <small className="muted">
+                  {fmtHours(hoursOf(s.start, s.end))} · Breaks {s.breaks.length ? s.breaks.map((b) => `${b.length}m`).join(" + ") : "none"}
+                  {s.sentHomeAt != null && " · bumped out"}
+                </small>
+              </div>
+              <label className="mini">
+                In
+                <input
+                  type="time"
+                  className="field"
+                  value={toInput(s.start)}
+                  onChange={(e) => {
+                    const v = fromInput(e.target.value);
+                    if (v != null) mutate((d) => updateShift(d, s.id, { start: v }), { auto: true });
+                  }}
+                />
+              </label>
+              <label className="mini">
+                Out
+                <input
+                  type="time"
+                  className="field"
+                  value={toInput(s.end)}
+                  onChange={(e) => {
+                    const v = fromInput(e.target.value);
+                    if (v != null) mutate((d) => updateShift(d, s.id, { end: normalizeEnd(s.start, v) }), { auto: true });
+                  }}
+                />
+              </label>
               <select
-                className="field"
+                className="field team-works"
+                aria-label="Works as"
                 value={assignOf(s)}
                 onChange={(e) => {
                   const { lock, role } = parseAssign(e.target.value);
@@ -240,49 +255,39 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
               >
                 <AssignOptions keepCustom={s.role === "custom"} />
               </select>
-            </label>
-            {s.role === "custom" ? (
-              <label className="lbl">
-                Position name
+              {s.role === "custom" ? (
                 <input
-                  className="field"
+                  className="field team-extra"
                   list="gds-roles"
+                  aria-label="Position name"
                   value={s.roleLabel ?? ""}
                   maxLength={24}
-                  placeholder="Custom"
+                  placeholder="Position name"
                   onChange={(e) => mutate((d) => updateShift(d, s.id, { roleLabel: e.target.value }))}
                 />
-              </label>
-            ) : s.role ? (
-              <span className="badge">{roleName(s)}</span>
-            ) : (
-              <label className="checkbox">
-                <input
-                  type="checkbox"
-                  checked={s.floater}
-                  onChange={(e) => mutate((d) => updateShift(d, s.id, { floater: e.target.checked }), { auto: true })}
-                />
-                Floater
-              </label>
-            )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className="muted" style={{ fontSize: "0.8rem" }}>
-                {fmtHours(hoursOf(s.start, s.end))} · {fmt(s.start)}–{fmt(s.end)}
-                {s.sentHomeAt != null && " · bumped out"}
-                <br />
-                Breaks: {s.breaks.length ? s.breaks.map((b) => `${b.length}m`).join(" + ") : "none"}
-                {!s.breaksCustom && s.breaks.length === 0 ? ` (rule: ${breakSummary(s.start, s.end)})` : ""}
-              </span>
+              ) : s.role ? (
+                <span className="badge team-extra">{roleName(s)}</span>
+              ) : (
+                <label className="checkbox team-extra">
+                  <input
+                    type="checkbox"
+                    checked={s.floater}
+                    onChange={(e) => mutate((d) => updateShift(d, s.id, { floater: e.target.checked }), { auto: true })}
+                  />
+                  Floater
+                </label>
+              )}
               <button
-                className="btn danger small"
+                className="btn ghost small team-x"
                 aria-label={`Remove ${s.name}`}
+                title="Remove from today"
                 onClick={() => mutate((d) => removeShift(d, s.id), { auto: true })}
               >
-                Remove
+                ✕
               </button>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="section-title">

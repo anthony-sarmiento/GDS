@@ -3,20 +3,35 @@ import { DayState, Settings, TeamMember } from "./types";
 
 /** Everything here talks to Supabase. Each call returns quietly (null / false) if the network or a rule says no. */
 
+/** Reads profiles. Falls back to the columns that always exist if the picture column has not been added yet. */
+async function readProfiles(filter?: { id: string }): Promise<Profile[]> {
+  const run = (cols: string) => {
+    const q = supabase.from("profiles").select(cols);
+    return filter ? q.eq("id", filter.id) : q.order("created_at");
+  };
+  let res = await run("id,email,name,role,avatar_url");
+  if (res.error) res = await run("id,email,name,role");
+  return ((res.data as unknown) as Profile[] | null) ?? [];
+}
+
 export async function loadProfile(userId: string, email: string, name: string): Promise<Profile | null> {
-  const read = () => supabase.from("profiles").select("id,email,name,role").eq("id", userId).maybeSingle();
-  let { data } = await read();
+  const read = async () => (await readProfiles({ id: userId }))[0] ?? null;
+  let data = await read();
   if (!data) {
     // the database normally makes this on first sign-in; this covers the case where it has not run yet
     await supabase.from("profiles").insert({ id: userId, email, name, role: "staff" });
-    ({ data } = await read());
+    data = await read();
   }
-  return (data as Profile | null) ?? null;
+  return data;
+}
+
+/** Keep this person's Google picture on their profile so leads can see it. Quietly does nothing if it cannot. */
+export async function saveMyAvatar(url: string): Promise<void> {
+  await supabase.rpc("save_my_avatar", { p_url: url });
 }
 
 export async function loadAccounts(): Promise<Profile[]> {
-  const { data } = await supabase.from("profiles").select("id,email,name,role").order("created_at");
-  return (data as Profile[] | null) ?? [];
+  return readProfiles();
 }
 
 export async function setRole(id: string, role: Role): Promise<boolean> {

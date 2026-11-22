@@ -21,4 +21,6 @@ export interface Profile {
   email: string;
   name: string;
   role: Role;
+  /** Google profile picture. */
+  avatar_url?: string | null;
 }

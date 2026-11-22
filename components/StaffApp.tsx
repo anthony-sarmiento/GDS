@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Avatar from "./Avatar";
 import { loadMyDay, MyDay, pressBreak } from "@/lib/cloud";
 import { Profile } from "@/lib/supabase";
 import { operatingDate, operatingMinutes, prettyDate, fmt, fmtDuration } from "@/lib/time";
@@ -159,17 +160,14 @@ export default function StaffApp({
     }
   }
 
+  const first = (mine?.name ?? profile.name ?? "").trim().split(/\s+/)[0] || "there";
+  const untilAt = !active && !bumpedOut && next ? next.at : null;
+
   return (
     <div className="shell staff">
-      <header className="topbar">
-        <div className="brand">
-          <Image src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={200} height={92} priority />
-          <div className="brand-text">
-            <h1>GDS</h1>
-            <span>{profile.name || profile.email}</span>
-          </div>
-        </div>
-        <div className="tools">
+      <header className="staff-top">
+        <Image className="staff-logo" src="/geekd-logo.webp" alt="GEEK'D Trading Cards & More" width={120} height={55} priority />
+        <div className="staff-actions">
           {onSwitch && (
             <button className="btn small" onClick={onSwitch}>
               Lead view
@@ -181,25 +179,29 @@ export default function StaffApp({
         </div>
       </header>
 
-      <p className="muted" style={{ marginTop: -8 }}>
-        {prettyDate(date)}
-      </p>
+      <div className="staff-hello">
+        <Avatar url={profile.avatar_url} name={mine?.name ?? profile.name ?? profile.email} size={52} />
+        <div>
+          <b>Hi {first}</b>
+          <span>{prettyDate(date)}</span>
+        </div>
+      </div>
 
       {mine == null && !failed && <div className="card muted">Loading…</div>}
-      {failed && <div className="card note warn">Could not reach GDS. Trying again…</div>}
+      {failed && <div className="note warn">Could not reach GDS. Trying again…</div>}
 
       {mine && !mine.linked && (
-        <div className="card">
+        <div className="card staff-empty">
           <h2>Almost there</h2>
           <p className="muted">
-            Your Google account ({profile.email}) is not linked to a team member yet. Ask your lead to add your email under Team → People.
+            Your Google account ({profile.email}) is not linked to a team member yet. Ask your lead to add your email in Admin → People.
           </p>
         </div>
       )}
 
       {mine?.linked && !shift && (
-        <div className="card">
-          <h2>Hi {mine.name}</h2>
+        <div className="card staff-empty">
+          <h2>Nothing today</h2>
           <p className="muted">You are not on today&rsquo;s schedule.</p>
         </div>
       )}
@@ -213,29 +215,30 @@ export default function StaffApp({
             </div>
           )}
 
-          <div className={`staff-now tone-${tone}`}>
-            <small>Right now</small>
+          <section className={`staff-hero tone-${tone}`} aria-label="Current position">
+            <small>Current position</small>
             <strong>{heading}</strong>
             {sub && <span>{sub}</span>}
-          </div>
+            {untilAt != null && <em>until {fmt(untilAt)}</em>}
+          </section>
 
           {!active && next && !bumpedOut && (
-            <div className="card staff-next">
+            <div className="staff-row">
               <small>Next</small>
               <b>{next.name}</b>
-              <span>at {fmt(next.at)}</span>
+              <span>{fmt(next.at)}</span>
             </div>
           )}
 
           {shift.sentHomeAt != null && !bumpedOut && (
-            <div className="card staff-next">
+            <div className="staff-row">
               <small>Bumpout</small>
-              <b>{fmt(shift.sentHomeAt)}</b>
-              <span>{shift.bumpedBy ? `${shift.bumpedBy} takes over` : ""}</span>
+              <b>{shift.bumpedBy ? `${shift.bumpedBy} takes over` : "Clock out"}</b>
+              <span>{fmt(shift.sentHomeAt)}</span>
             </div>
           )}
 
-          <div className="card staff-breaks">
+          <section className="staff-breaks" aria-label="Breaks">
             <h2>Breaks</h2>
             {active && (
               <div className="staff-break active">
@@ -261,7 +264,7 @@ export default function StaffApp({
                 </div>
               ))}
             {active && owed.length > 0 && (
-              <div className="muted">Still to take: {owed.map((b) => (b.length >= 30 ? "30–60 min" : `${b.length} min`)).join(", ")}</div>
+              <p className="muted">Still to take: {owed.map((b) => (b.length >= 30 ? "30–60 min" : `${b.length} min`)).join(", ")}</p>
             )}
             {done.map((b) => (
               <div className="staff-break done" key={b.id}>
@@ -272,15 +275,14 @@ export default function StaffApp({
                     {b.end != null && b.start != null ? ` · ${fmtDuration(b.end - b.start)}` : ""}
                   </span>
                 </div>
-                <span className="muted">✓</span>
+                <span className="check">✓</span>
               </div>
             ))}
-            {!breaks.length && <div className="muted">No breaks on your shift.</div>}
-            {plannedBreak && !active && <div className="muted">Your lead planned a break for {fmt(plannedBreak.planned ?? 0)}.</div>}
-          </div>
+            {!breaks.length && <p className="muted">No breaks on your shift.</p>}
+          </section>
 
-          <p className="muted" style={{ textAlign: "center" }}>
-            {fmt(shift.start)}–{fmt(shift.end)}
+          <p className="staff-shift">
+            Your shift {fmt(shift.start)}–{fmt(shift.end)}
           </p>
         </>
       )}

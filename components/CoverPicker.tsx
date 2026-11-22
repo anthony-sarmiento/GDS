@@ -73,7 +73,7 @@ export default function CoverPicker({
           </span>
         </button>
       </div>
-      {options.length === 0 && <p className="muted">Nobody else is free to rotate over for this whole stretch.</p>}
+      {options.length === 0 && <p className="muted">No one is free to rotate over for this whole stretch. They can stay until their bumpout, or a lead can cover.</p>}
     </div>
   );
 }

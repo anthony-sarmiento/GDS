@@ -43,6 +43,8 @@ export interface Ctx {
   cloud: boolean;
   /** Saved people. */
   team: TeamMember[];
+  /** Google picture by lowercase email, for the people who have signed in. */
+  avatars: Record<string, string>;
   saveMember: (m: TeamMember) => void;
   removeMember: (id: string) => void;
 }

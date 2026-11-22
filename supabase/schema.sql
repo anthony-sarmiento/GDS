@@ -14,6 +14,9 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- The Google profile picture, so the board can show faces next to names
+alter table public.profiles add column if not exists avatar_url text;
+
 -- Is the signed-in person an admin? Only admins can change anyone's role.
 create or replace function public.is_admin()
 returns boolean
@@ -47,12 +50,13 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, name, role)
+  insert into public.profiles (id, email, name, role, avatar_url)
   values (
     new.id,
     coalesce(new.email, ''),
     coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', split_part(coalesce(new.email, ''), '@', 1)),
-    case when lower(coalesce(new.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end
+    case when lower(coalesce(new.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end,
+    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')
   )
   on conflict (id) do nothing;
   return new;
@@ -65,13 +69,32 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- Anyone who already signed in before this ran
-insert into public.profiles (id, email, name, role)
+insert into public.profiles (id, email, name, role, avatar_url)
 select u.id,
        coalesce(u.email, ''),
        coalesce(u.raw_user_meta_data ->> 'full_name', u.raw_user_meta_data ->> 'name', split_part(coalesce(u.email, ''), '@', 1)),
-       case when lower(coalesce(u.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end
+       case when lower(coalesce(u.email, '')) = 'antsarmiento440@gmail.com' then 'owner' else 'staff' end,
+       coalesce(u.raw_user_meta_data ->> 'avatar_url', u.raw_user_meta_data ->> 'picture')
 from auth.users u
 on conflict (id) do nothing;
+
+-- Pictures for accounts that already existed
+update public.profiles p
+set avatar_url = coalesce(u.raw_user_meta_data ->> 'avatar_url', u.raw_user_meta_data ->> 'picture')
+from auth.users u
+where u.id = p.id and p.avatar_url is null;
+
+-- Each person keeps their own picture up to date (only that one column, only their own row)
+create or replace function public.save_my_avatar(p_url text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.profiles set avatar_url = nullif(left(p_url, 500), '') where id = auth.uid();
+$$;
+revoke all on function public.save_my_avatar(text) from public, anon;
+grant execute on function public.save_my_avatar(text) to authenticated;
 
 -- The first account is the admin ('owner' in the database), even if its profile was made some other way
 update public.profiles set role = 'owner'
