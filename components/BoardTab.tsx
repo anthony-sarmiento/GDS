@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
 import AssignDialog from "./AssignDialog";
+import Steps from "./Steps";
 import { Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
@@ -58,7 +59,7 @@ function useCompact(): boolean {
 export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void }) {
   const { day, now, mutate } = ctx;
   const [bumpFor, setBumpFor] = useState<string | null>(null);
-  const [assignFor, setAssignFor] = useState<{ shiftId?: string; at?: number } | null>(null);
+  const [assignFor, setAssignFor] = useState<{ shiftId?: string; at?: number; where?: "break" } | null>(null);
   const crew = rotating(day.shifts);
   const leads = day.shifts.filter((s) => s.role);
 
@@ -68,9 +69,10 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
         <h2>Nobody on the board yet</h2>
         <p>
           {leads.length
-            ? "Only leads are on today. Leads are not on the rotation, so add the retail team."
-            : "Add today's team, then assign each person a starting position from the Board."}
+            ? "Only leads are on today. Leads are not on the board, so add the retail team."
+            : "Start by adding today's team. Here is how a day runs in GDS:"}
         </p>
+        <Steps />
         <button className="btn primary" onClick={goTeam}>
           Add team
         </button>
@@ -80,16 +82,22 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
   return (
     <div>
+      <div className="quick-actions no-print">
+        <button className="btn primary big" onClick={() => setAssignFor({})}>
+          Move or assign someone
+        </button>
+        <button className="btn big" onClick={() => setAssignFor({ where: "break" })}>
+          Send someone on break
+        </button>
+      </div>
+
       {now != null && <NowPanel ctx={ctx} onBump={setBumpFor} onAssign={(id) => setAssignFor({ shiftId: id })} />}
-      {now != null && <BreakQueue ctx={ctx} />}
+      {now != null && <BreakQueue ctx={ctx} onSend={(id) => setAssignFor({ shiftId: id, where: "break" })} />}
 
       <div className="section-title">
-        <h2>Board</h2>
-        <p>Assign each person a starting position, then move them whenever you need to. They stay put until you do.</p>
+        <h2>Timeline</h2>
+        <p>Everyone's day at a glance. Tap a row or a name to move them. People stay where you put them until you move them.</p>
         <span className="spacer" />
-        <button className="btn primary" onClick={() => setAssignFor({})}>
-          Assign
-        </button>
         <button
           className="btn ghost"
           onClick={() => {
@@ -128,7 +136,13 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       {bumpFor && <BumpDialog ctx={ctx} outId={bumpFor} onClose={() => setBumpFor(null)} />}
       {assignFor && (
-        <AssignDialog ctx={ctx} shiftId={assignFor.shiftId} at={assignFor.at} onClose={() => setAssignFor(null)} />
+        <AssignDialog
+          ctx={ctx}
+          shiftId={assignFor.shiftId}
+          at={assignFor.at}
+          startWhere={assignFor.where}
+          onClose={() => setAssignFor(null)}
+        />
       )}
     </div>
   );
@@ -202,11 +216,11 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {s.floater && <span className="badge">Floater</span>}
                     {s.lock && <span className="badge">Stays</span>}
                     <small>out {fmtShort(s.end)}</small>
-                    <button className="btn ghost small" title={`Assign ${s.name} somewhere`} onClick={() => onAssign(s.id)}>
-                      Assign
+                    <button className="btn ghost small" title={`Move ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
+                      Move
                     </button>
-                    <button className="btn ghost small" title={`Bump ${s.name} out`} onClick={() => onBump(s.id)}>
-                      Bump
+                    <button className="btn ghost small" title={`Send ${s.name} home`} onClick={() => onBump(s.id)}>
+                      Send home
                     </button>
                   </div>
                 ))}
@@ -240,13 +254,19 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
   );
 }
 
-function BreakQueue({ ctx }: { ctx: Ctx }) {
+function BreakQueue({ ctx, onSend }: { ctx: Ctx; onSend: (shiftId: string) => void }) {
   const { day, settings, now, mutate } = ctx;
   const t = now!;
 
+  // Breaks on the board (placed or running) get a timer. Breaks nobody has placed yet are just a
+  // reminder of who still owes one: tap a name to send them.
+  const owed = day.shifts
+    .filter((s) => s.sentHomeAt == null && s.start <= t + 180 && t < s.end)
+    .flatMap((s) => s.breaks.filter((b) => breakStatus(b) === "unplanned").map((b) => ({ s, b })));
+
   const items = day.shifts
     .flatMap((s) => s.breaks.map((b) => ({ s, b })))
-    .filter(({ s, b }) => breakStatus(b) !== "done" && s.start <= t + 180 && t < s.end + 60)
+    .filter(({ s, b }) => breakStatus(b) !== "done" && breakStatus(b) !== "unplanned" && s.start <= t + 180 && t < s.end + 60)
     .map((x) => ({ ...x, at: effectiveStart(x.b) }))
     .sort((a, b) => {
       const aa = breakStatus(a.b) === "active" ? -1 : 0;
@@ -258,10 +278,20 @@ function BreakQueue({ ctx }: { ctx: Ctx }) {
   return (
     <div className="section">
       <div className="section-title">
-        <h2>Break timer</h2>
-        <p>On break now first. Tap Start when someone goes, and pick who rotates over. End when they are back.</p>
+        <h2>Breaks</h2>
+        <p>Tap Start when a planned break begins, and End when they are back.</p>
       </div>
-      {!items.length && <div className="card muted">No breaks coming up.</div>}
+      {owed.length > 0 && (
+        <div className="owed no-print">
+          <span className="muted">Still owed a break:</span>
+          {owed.map(({ s, b }) => (
+            <button key={b.id} className="chip" onClick={() => onSend(s.id)} title={`Send ${s.name} on break`}>
+              {s.name} <small>{b.length >= 30 ? "30–60" : b.length} min</small>
+            </button>
+          ))}
+        </div>
+      )}
+      {!items.length && <div className="card muted">No breaks are planned or running. Tap a name above to send someone.</div>}
       <div className="queue">
         {items.map(({ s, b, at }) => {
           const status = breakStatus(b);
@@ -344,6 +374,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
   const compact = useCompact();
   const LABEL_W = compact ? 92 : 200;
   const [brush, setBrush] = useState<Brush>("none");
+  const [tools, setTools] = useState(false); // the paint brushes are tucked away until asked for
   const [customLabel, setCustomLabel] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => setRecent(loadLabels()), []);
@@ -391,6 +422,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
       const hit = BRUSHES.find((b) => b.key === e.key);
       if (hit) {
         e.preventDefault(); // otherwise the key is typed into the custom-name box that opens
+        setTools(true);
         setBrush((cur) => (cur === hit.id ? "none" : hit.id));
       }
     };
@@ -538,16 +570,29 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
 
   return (
     <div>
-      <div className="palette no-print" role="toolbar" aria-label="Brush">
+      <div className="palette no-print" role="toolbar" aria-label="Timeline tools">
         <button
-          className="brush brush-pan"
-          aria-pressed={brush === "none"}
-          onClick={() => setBrush("none")}
-          title="Scroll and look without painting (Esc)"
+          className="btn small"
+          aria-expanded={tools}
+          onClick={() => {
+            setTools(!tools);
+            if (tools) setBrush("none");
+          }}
+          title="Paint exact ranges by hand with brushes"
         >
-          Pan
+          {tools ? "Hide paint tools" : "Paint by hand"}
         </button>
-        {BRUSHES.map((b) => (
+        {tools && (
+          <button
+            className="brush brush-pan"
+            aria-pressed={brush === "none"}
+            onClick={() => setBrush("none")}
+            title="Scroll and look without painting (Esc)"
+          >
+            Pan
+          </button>
+        )}
+        {tools && BRUSHES.map((b) => (
           <button
             key={b.id}
             className={`brush ${b.cls}`}
@@ -597,8 +642,8 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
       <p className="muted palette-hint" style={{ margin: 0 }}>
         {brush === "none" &&
           (compact
-            ? "Tap a row to assign from that time, or tap a name. Pick a brush to paint ranges by hand."
-            : "Click a row to assign someone from that time, or click a name. Pick a brush (keys 1–5, 0 to erase) to paint ranges by hand.")}
+            ? "Tap a row to move someone from that time, or tap a name."
+            : "Click a row to move someone from that time, or click a name. Use Paint by hand for exact ranges.")}
         {brush === "break" &&
           "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
         {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
@@ -668,7 +713,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     <button
                       className="who-name link"
                       onClick={() => onAssign(s.id, Math.max(s.start, now ?? s.start))}
-                      title={`Assign ${s.name} somewhere`}
+                      title={`Move ${s.name} somewhere else, or on break`}
                     >
                       {s.name || "(no name)"}
                     </button>
@@ -677,9 +722,9 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                         className="btn ghost small bump"
                         onClick={() => onBump(s.id)}
                         title="Send home / hand off to the next shift"
-                        aria-label={`Bump ${s.name} out`}
+                        aria-label={`Send ${s.name} home`}
                       >
-                        {compact ? "⋯" : "Bump out"}
+                        {compact ? "⋯" : "Send home"}
                       </button>
                     )}
                   </div>
@@ -901,8 +946,8 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
 
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
-      <div className="modal card" role="dialog" aria-modal="true" aria-label="Bump out" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 6 }}>Bump out</h2>
+      <div className="modal card" role="dialog" aria-modal="true" aria-label="Send home" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginBottom: 6 }}>Send home</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           Send someone home and hand their position to the next person.
         </p>
@@ -949,7 +994,7 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
             Cancel
           </button>
           <button className="btn primary" onClick={confirm}>
-            Bump out
+            {incoming ? "Send home and hand off" : "Send home"}
           </button>
         </div>
       </div>

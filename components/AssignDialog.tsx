@@ -32,11 +32,14 @@ export default function AssignDialog({
   ctx,
   shiftId,
   at,
+  startWhere,
   onClose,
 }: {
   ctx: Ctx;
   shiftId?: string;
   at?: number;
+  /** Open with "break" already picked. */
+  startWhere?: Where;
   onClose: () => void;
 }) {
   const { day, settings, now, mutate, flash } = ctx;
@@ -47,7 +50,7 @@ export default function AssignDialog({
   const [who, setWho] = useState(firstShift?.id ?? "");
   const person = crew.find((s) => s.id === who) ?? firstShift;
 
-  const [where, setWhere] = useState<Where>("front");
+  const [where, setWhere] = useState<Where>(startWhere ?? "front");
   const [label, setLabel] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => setRecent(loadLabels()), []);
@@ -65,11 +68,12 @@ export default function AssignDialog({
     const c = cellsFor(day.shifts, settings).find((x) => isPresent(p, x, g) && !day.cells[cellKey(p.id, x)]);
     return c == null ? null : Math.max(c, p.start);
   };
-  const startFor = (p: NonNullable<typeof person>) =>
-    round5(Math.min(Math.max(at ?? firstOpen(p) ?? now ?? p.start, p.start), p.end - g));
-  const startGuess = person ? startFor(person) : 0;
+  // a break starts when you send them (now); a position starts from the first unassigned time
+  const startFor = (p: NonNullable<typeof person>, w: Where = where) =>
+    round5(Math.min(Math.max(at ?? (w === "break" ? null : firstOpen(p)) ?? now ?? p.start, p.start), p.end - g));
+  const startGuess = person ? startFor(person, startWhere ?? "front") : 0;
   const [from, setFrom] = useState(startGuess);
-  const [until, setUntil] = useState(person ? defaultEnd(person, startGuess, "front") : startGuess + 60);
+  const [until, setUntil] = useState(person ? defaultEnd(person, startGuess, startWhere ?? "front") : startGuess + 60);
   // undefined = nothing picked yet, null = Nobody, otherwise the shift id of who rotates over
   const [coverChoice, setCoverChoice] = useState<string | null | undefined>(undefined);
   useEffect(() => setCoverChoice(undefined), [who, where, from, until]);
@@ -140,7 +144,7 @@ export default function AssignDialog({
     setWho(id);
     const p = crew.find((s) => s.id === id);
     if (!p) return;
-    const f = at != null ? round5(Math.min(Math.max(from, p.start), p.end - g)) : startFor(p);
+    const f = at != null ? round5(Math.min(Math.max(from, p.start), p.end - g)) : startFor(p, where);
     setFrom(f);
     setUntil(defaultEnd(p, f, where));
   }
@@ -154,7 +158,11 @@ export default function AssignDialog({
   function changeWhere(w: Where) {
     setWhere(w);
     // keep a length you set yourself; only reset when switching between kinds of assignment
-    if (w === "break" || isBreak || w === "other" || where === "other") setUntil(defaultEnd(person!, from, w));
+    if (w === "break" || isBreak || w === "other" || where === "other") {
+      const f = at == null && (w === "break" || isBreak) ? startFor(person!, w) : from;
+      setFrom(f);
+      setUntil(defaultEnd(person!, f, w));
+    }
   }
 
   function confirm() {
@@ -228,9 +236,11 @@ export default function AssignDialog({
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 6 }}>Assign</h2>
+        <h2 style={{ marginBottom: 6 }}>{isBreak ? "Send on break" : "Move or assign"}</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          Send someone somewhere, or on break, at a set time. You choose who rotates over.
+          {isBreak
+            ? "Pick who, when and how long. If the position needs a cover, you choose who rotates over."
+            : "Pick who, where, and for how long. They stay there until you move them again."}
         </p>
 
         <div className="stack">

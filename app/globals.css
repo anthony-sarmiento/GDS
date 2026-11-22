@@ -2501,3 +2501,96 @@ button,
   color: var(--muted);
   font-weight: 500;
 }
+
+/* ---------- clearer board: quick actions, owed breaks, first-run steps ---------- */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.btn.big {
+  min-height: 52px;
+  font-size: 1.05rem;
+  justify-content: center;
+}
+
+.owed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--navy-800);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--break);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--navy-700);
+}
+
+.chip small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.steps {
+  list-style: none;
+  margin: 16px auto 20px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+  text-align: left;
+}
+
+.steps li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--navy-700);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.steps p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.step-n {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--navy-900);
+  font-family: var(--font-display);
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 700px) {
+  .quick-actions {
+    gap: 8px;
+  }
+  .quick-actions .btn.big {
+    font-size: 0.92rem;
+    line-height: 1.15;
+    padding: 8px 10px;
+    text-align: center;
+  }
+}

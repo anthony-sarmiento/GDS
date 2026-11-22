@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Ctx } from "./ctx";
+import Steps from "./Steps";
 import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
 import { requiredBreaks } from "@/lib/breaks";
@@ -189,7 +190,8 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
       <div className="card">
         {!day.shifts.length && (
           <div className="empty" style={{ padding: "24px 8px" }}>
-            Nobody on today yet. Add your openers, closers, and floater above.
+            <p style={{ marginTop: 0 }}>Nobody on today yet. Add your openers, closers, and floater above.</p>
+            <Steps />
           </div>
         )}
         {day.shifts.map((s) => (
