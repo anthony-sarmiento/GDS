@@ -109,8 +109,21 @@ export default function App({
     let cancelled = false;
     (async () => {
       const today = operatingDate(new Date());
-      const [days, settings, team] = await Promise.all([loadRecentDays(addDays(today, -14)), loadSettings(), loadTeam()]);
+      const [days, settings, loadedTeam] = await Promise.all([loadRecentDays(addDays(today, -14)), loadSettings(), loadTeam()]);
       if (cancelled) return;
+      // leads can work a retail shift too: make sure this account is saved as a person with its email
+      let team = loadedTeam;
+      const myEmail = profile.email.trim().toLowerCase();
+      const linked = team.some((m) => (m.email ?? "").split(",").some((e) => e.trim().toLowerCase() === myEmail));
+      if (myEmail && !linked) {
+        const myName = (profile.name || myEmail.split("@")[0]).trim();
+        const same = team.find((m) => m.name.trim().toLowerCase() === myName.toLowerCase());
+        const me = same
+          ? { ...same, email: [same.email, myEmail].filter((x) => x && x.trim()).join(",") }
+          : { id: crypto.randomUUID(), name: myName, email: myEmail };
+        void cloudSaveMember(me);
+        team = [...team.filter((m) => m.id !== me.id), me].sort((a, b) => a.name.localeCompare(b.name));
+      }
       setState((prev) => {
         const merged = settings ? mergeSettings(settings) : prev.settings;
         const next: AppState = { ...prev, settings: merged, team: team.length ? team : prev.team ?? [] };

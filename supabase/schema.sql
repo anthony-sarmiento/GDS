@@ -323,6 +323,59 @@ grant execute on function public.staff_break(text, text, text, text, int) to aut
 grant execute on function public.is_lead() to authenticated;
 grant execute on function public.is_admin() to authenticated;
 
+-- Leads, managers and admins can also work a retail shift, so every lead-side account is saved
+-- as a person (People) with its Google email. A person with the same name gets the email added.
+create or replace function public.ensure_retail_member(p_name text, p_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  e text := lower(trim(coalesce(p_email, '')));
+  n text := trim(coalesce(p_name, ''));
+begin
+  if e = '' or public.member_name_for(e) is not null then return; end if;
+  if n = '' then n := split_part(e, '@', 1); end if;
+  update public.team
+     set email = case when coalesce(trim(email), '') = '' then e else email || ',' || e end
+   where lower(name) = lower(n);
+  if not found then
+    insert into public.team (name, email) values (n, e) on conflict do nothing;
+  end if;
+end;
+$$;
+
+create or replace function public.lead_is_retail_too()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.role in ('lead', 'manager', 'owner') then
+    perform public.ensure_retail_member(new.name, new.email);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists lead_is_retail_too on public.profiles;
+create trigger lead_is_retail_too
+  after insert or update of role on public.profiles
+  for each row execute function public.lead_is_retail_too();
+
+-- everyone already on the lead side
+do $$
+declare r record;
+begin
+  for r in select name, email from public.profiles where role in ('lead', 'manager', 'owner') loop
+    perform public.ensure_retail_member(r.name, r.email);
+  end loop;
+end $$;
+
+revoke all on function public.ensure_retail_member(text, text) from public, anon, authenticated;
+
 -- Let the lead's screen hear about staff break presses right away
 do $$
 begin

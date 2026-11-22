@@ -89,7 +89,7 @@ Setup, once:
 1. Supabase → SQL Editor → paste `supabase/schema.sql` → Run. It creates the tables and the security rules, and makes `antsarmiento440@gmail.com` the first Lead.
 2. Supabase → Authentication → URL Configuration: set **Site URL** to the live site and add `http://localhost:3000` to **Redirect URLs**.
 3. Turn on the Google provider (Authentication → Sign In / Providers).
-4. Admin tab (admins only; `antsarmiento440@gmail.com` is the first admin): Accounts promotes new sign-ins (everyone starts as Staff) and People holds each person's Google email(s), comma separated, so their sign-in lands on their own shift. A lead who is also scheduled on the floor uses the **My shift** / **Lead view** buttons to switch sides.
+4. Leads, managers and admins are saved in People automatically (with their email), so they can also be put on the floor and use **My shift**. Admin tab (admins only; `antsarmiento440@gmail.com` is the first admin): Accounts promotes new sign-ins (everyone starts as Staff) and People holds each person's Google email(s), comma separated, so their sign-in lands on their own shift. A lead who is also scheduled on the floor uses the **My shift** / **Lead view** buttons to switch sides.
 5. `supabase/fresh-start.sql` wipes saved days and people (test data) and saves Anthony Sarmiento with his retail email.
 
 The project URL and publishable key are in `lib/supabase.ts` (override with `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_KEY`). The publishable key is safe in the browser; the database security rules are what protect the data. Never put the `service_role` key in this project.
