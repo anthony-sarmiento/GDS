@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Inter } from "next/font/google";
 import "./globals.css";
+import "./theme.css";
 
 const anton = Anton({ weight: "400", subsets: ["latin"], variable: "--font-anton" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
