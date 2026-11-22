@@ -28,7 +28,18 @@ function withPending(shift: Shift, events: NonNullable<MyDay["events"]>): Brk[] 
  * The retail side: where am I now, where am I going next, and my breaks. Nothing else.
  * Starting or ending a break updates the lead's break sheet.
  */
-export default function StaffApp({ profile, cloud, onSignOut }: { profile: Profile; cloud: boolean; onSignOut: () => void }) {
+export default function StaffApp({
+  profile,
+  cloud,
+  onSignOut,
+  onSwitch,
+}: {
+  profile: Profile;
+  cloud: boolean;
+  onSignOut: () => void;
+  /** Only for lead-side accounts: go back to the lead view. */
+  onSwitch?: () => void;
+}) {
   const [clock, setClock] = useState(() => new Date());
   const [mine, setMine] = useState<MyDay | null>(null);
   const [failed, setFailed] = useState(false);
@@ -159,6 +170,11 @@ export default function StaffApp({ profile, cloud, onSignOut }: { profile: Profi
           </div>
         </div>
         <div className="tools">
+          {onSwitch && (
+            <button className="btn small" onClick={onSwitch}>
+              Lead view
+            </button>
+          )}
           <button className="btn ghost small" onClick={onSignOut}>
             Sign out
           </button>

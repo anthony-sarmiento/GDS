@@ -41,7 +41,18 @@ import { addCheck, checkStatus } from "@/lib/checks";
 
 type Tab = "board" | "breaks" | "checks" | "history" | "team";
 
-export default function App({ profile, cloud, onSignOut }: { profile: Profile; cloud: boolean; onSignOut: () => void }) {
+export default function App({
+  profile,
+  cloud,
+  onSignOut,
+  onSwitch,
+}: {
+  profile: Profile;
+  cloud: boolean;
+  onSignOut: () => void;
+  /** Look at the staff side (for a lead who is also scheduled on the floor). */
+  onSwitch: () => void;
+}) {
   const [state, setState] = useState<AppState>(initialState);
   const [hydrated, setHydrated] = useState(false);
   const [clock, setClock] = useState<Date>(() => new Date());
@@ -355,6 +366,9 @@ export default function App({ profile, cloud, onSignOut }: { profile: Profile; c
           <span>
             <b>{profile.name || profile.email}</b> · {ROLE_LABEL[profile.role]}
           </span>
+          <button className="btn small" onClick={onSwitch} title="See your own shift, the way staff see it">
+            My shift
+          </button>
           <button className="btn ghost small" onClick={onSignOut}>
             Sign out
           </button>

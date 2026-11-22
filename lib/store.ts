@@ -4,7 +4,9 @@ import { autoFill, breakAtCell, breakSpan, cellAt, cellKey, cellsFor, isPresent 
 import { clearAutoCells, clearCover, transitColumns } from "./cover";
 import { normalizeEnd } from "./time";
 
-export const STORAGE_KEY = "gds:v1";
+export const STORAGE_KEY = "gds:v2";
+/** The first version's key. Anything saved under it was test data, so it is removed. */
+const OLD_KEY = "gds:v1";
 
 export const emptyDay = (date: string): DayState => ({
   date,
@@ -37,6 +39,7 @@ export function mergeSettings(saved?: Partial<Settings>): Settings {
 
 export function loadState(): AppState {
   try {
+    if (localStorage.getItem(OLD_KEY) != null) localStorage.removeItem(OLD_KEY);
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialState();
     const parsed = JSON.parse(raw) as Partial<AppState>;

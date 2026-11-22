@@ -31,6 +31,8 @@ function Brand() {
 /** Signs people in with Google, then shows the lead side or the staff side depending on their account. */
 export default function Root() {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
+  // someone on the lead side can also be scheduled on the floor, so they can look at either side
+  const [side, setSide] = useState<"lead" | "staff">("lead");
 
   const settle = useCallback(async () => {
     const dev = devRole();
@@ -79,10 +81,11 @@ export default function Root() {
   if (phase.kind === "out") return <Login error={phase.error} />;
 
   const { profile, local } = phase;
-  return isLeadSide(profile.role) ? (
-    <App profile={profile} cloud={!local} onSignOut={signOut} />
+  const lead = isLeadSide(profile.role);
+  return lead && side === "lead" ? (
+    <App profile={profile} cloud={!local} onSignOut={signOut} onSwitch={() => setSide("staff")} />
   ) : (
-    <StaffApp profile={profile} cloud={!local} onSignOut={signOut} />
+    <StaffApp profile={profile} cloud={!local} onSignOut={signOut} onSwitch={lead ? () => setSide("lead") : undefined} />
   );
 }
 

@@ -142,6 +142,21 @@ create policy events_update on public.staff_events for update to authenticated u
 -- Staff side
 -- ---------------------------------------------------------------------------
 
+-- The saved person a Google email belongs to. A person can have several emails (comma separated).
+create or replace function public.member_name_for(p_email text)
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select t.name
+  from public.team t
+  where p_email <> ''
+    and lower(p_email) = any (string_to_array(regexp_replace(lower(coalesce(t.email, '')), '\s', '', 'g'), ','))
+  limit 1;
+$$;
+
 -- My shift today: only my own shift and my own board columns, plus my break presses the lead has not applied yet.
 -- A person is matched to a shift by the name saved for their Google email (Team tab -> People).
 create or replace function public.my_day(d text)
@@ -162,7 +177,7 @@ begin
     return jsonb_build_object('linked', false);
   end if;
 
-  select t.name into me_name from public.team t where lower(t.email) = me_email limit 1;
+  select public.member_name_for(me_email) into me_name;
   if me_name is null then
     return jsonb_build_object('linked', false);
   end if;
@@ -210,7 +225,7 @@ begin
   if auth.uid() is null then raise exception 'not signed in'; end if;
   if p_kind not in ('start', 'end') then raise exception 'bad kind'; end if;
 
-  select t.name into me_name from public.team t where lower(t.email) = me_email limit 1;
+  select public.member_name_for(me_email) into me_name;
   if me_name is null then raise exception 'not linked to a team member'; end if;
 
   select exists (

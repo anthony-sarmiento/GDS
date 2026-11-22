@@ -29,7 +29,7 @@ const assignOf = (s: Pick<Shift, "lock" | "role">) => (s.role ? `lead:${s.role}`
 function AssignOptions({ keepCustom = false }: { keepCustom?: boolean }) {
   return (
     <>
-      <option value="">On the board</option>
+      <option value="">Retail (on the board)</option>
       {POSITIONS.map((p) => (
         <option key={p} value={p}>
           Stays at {POSITION_LABEL[p]}
@@ -432,11 +432,11 @@ function PeopleCard({ ctx, onPick }: { ctx: Ctx; onPick: (name: string) => void 
             <input
               className="field"
               type="email"
-              placeholder="Google email (so they can sign in)"
+              placeholder="Google email(s), comma separated"
               aria-label={`Google email for ${m.name}`}
               defaultValue={m.email ?? ""}
               onBlur={(e) => {
-                const email = e.target.value.trim().toLowerCase();
+                const email = e.target.value.split(/[\s,;]+/).filter(Boolean).join(",").toLowerCase();
                 if (email !== (m.email ?? "")) ctx.saveMember({ ...m, email: email || null });
               }}
             />
