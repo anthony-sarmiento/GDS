@@ -76,3 +76,21 @@ Break length is editable per break, and breaks can be added or removed. Rules li
 - `lib/cover.ts` – the cover rule for breaks.
 - `lib/store.ts` – state helpers: painting, break placement, bump out.
 - "Board starts at" (default 10:00 AM) anchors the board columns.
+
+## Accounts and the database (Supabase)
+
+GDS signs people in with Google and keeps its data in Supabase. There are two sides, picked by the account's role:
+
+- **Lead side** (Lead, Manager, Owner): the full board, breaks, bathroom checks, team, and a **History** tab with every saved day (searchable by name). Days, settings and saved people sync to the database; this browser keeps a copy too.
+- **Staff side** (Staff): where they are now, what is next, their bumpout notice, and **Start break / End break**. Presses show up on the lead's screen right away.
+
+Setup, once:
+
+1. Supabase → SQL Editor → paste `supabase/schema.sql` → Run. It creates the tables and the security rules, and makes `antsarmiento440@gmail.com` the first Lead.
+2. Supabase → Authentication → URL Configuration: set **Site URL** to the live site and add `http://localhost:3000` to **Redirect URLs**.
+3. Turn on the Google provider (Authentication → Sign In / Providers).
+4. Team → People: add each person's Google email so their sign-in lands on their own shift. Team → Accounts: promote new accounts (everyone starts as Staff).
+
+The project URL and publishable key are in `lib/supabase.ts` (override with `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_KEY`). The publishable key is safe in the browser; the database security rules are what protect the data. Never put the `service_role` key in this project.
+
+On your own computer, `?dev=lead` or `?dev=staff` skips sign-in (development only, not in the live build).

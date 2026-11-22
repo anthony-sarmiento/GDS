@@ -1,4 +1,4 @@
-import { AppState, DayState, Position, Settings } from "@/lib/types";
+import { AppState, DayState, Position, Settings, TeamMember } from "@/lib/types";
 import { CoverOption } from "@/lib/cover";
 
 /** Asks the lead who rotates over to a position while its holder is on break. */
@@ -39,6 +39,12 @@ export interface Ctx {
   flash: (msg: string) => void;
   /** Open the "who covers?" question. */
   askCover: (prompt: CoverPrompt) => void;
+  /** Signed in with the database behind it (false only on a developer's own computer). */
+  cloud: boolean;
+  /** Saved people. */
+  team: TeamMember[];
+  saveMember: (m: TeamMember) => void;
+  removeMember: (id: string) => void;
 }
 
 export const FIRST_NAME = (name: string) => name.trim().split(/\s+/)[0] || "—";

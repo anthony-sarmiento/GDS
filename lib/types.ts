@@ -122,10 +122,19 @@ export interface Settings {
   limits: Record<Position, Limits>;
 }
 
+/** A saved person. `email` links them to their Google account so they can sign in to the staff side. */
+export interface TeamMember {
+  id: string;
+  name: string;
+  email?: string | null;
+}
+
 export interface AppState {
   settings: Settings;
   /** Every name ever typed in, for autocomplete. */
   names: string[];
+  /** Saved people (kept in the database too). */
+  team?: TeamMember[];
   days: Record<string, DayState>;
 }
 

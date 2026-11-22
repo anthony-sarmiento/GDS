@@ -2,7 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AppState, DayState, Settings } from "@/lib/types";
+import { AppState, DayState, Settings, TeamMember } from "@/lib/types";
+import { Profile, ROLE_LABEL } from "@/lib/supabase";
+import {
+  deleteMember as cloudDeleteMember,
+  listenForEvents,
+  loadDay,
+  loadOpenEvents,
+  loadRecentDays,
+  loadSettings,
+  loadTeam,
+  markApplied,
+  saveDay,
+  saveMember as cloudSaveMember,
+  saveSettings,
+} from "@/lib/cloud";
 import {
   addDays,
   fmt,
@@ -13,7 +27,7 @@ import {
   prettyDate,
   toInput,
 } from "@/lib/time";
-import { emptyDay, initialState, loadState, refresh, rememberName, saveState } from "@/lib/store";
+import { emptyDay, endBreak, initialState, loadState, mergeSettings, refresh, rememberName, saveState, startBreak } from "@/lib/store";
 import { breakStatus } from "@/lib/breaks";
 import { Ctx, CoverPrompt } from "./ctx";
 import { emptyHistory, History, recordChange, stepBack, stepForward } from "@/lib/history";
@@ -21,12 +35,13 @@ import CoverDialog from "./CoverDialog";
 import BoardTab from "./BoardTab";
 import BreaksTab from "./BreaksTab";
 import TeamTab from "./TeamTab";
+import HistoryTab from "./HistoryTab";
 import ChecksTab, { ago } from "./ChecksTab";
 import { addCheck, checkStatus } from "@/lib/checks";
 
-type Tab = "board" | "breaks" | "checks" | "team";
+type Tab = "board" | "breaks" | "checks" | "history" | "team";
 
-export default function App() {
+export default function App({ profile, cloud, onSignOut }: { profile: Profile; cloud: boolean; onSignOut: () => void }) {
   const [state, setState] = useState<AppState>(initialState);
   const [hydrated, setHydrated] = useState(false);
   const [clock, setClock] = useState<Date>(() => new Date());
@@ -37,6 +52,9 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [coverPrompt, setCoverPrompt] = useState<CoverPrompt | null>(null);
   const [snoozeUntil, setSnoozeUntil] = useState<number | null>(null);
+  const [cloudReady, setCloudReady] = useState(!cloud);
+  const savedDays = useRef<Record<string, string>>({});
+  const savedSettings = useRef<string>("");
 
   // load saved data once we're in the browser
   useEffect(() => {
@@ -48,10 +66,112 @@ export default function App() {
     setHydrated(true);
   }, []);
 
-  // persist
+  const ready = hydrated && cloudReady;
+
+  // keep a copy in this browser too, so a dropped connection never loses the day
   useEffect(() => {
-    if (hydrated) saveState(state);
-  }, [state, hydrated]);
+    if (ready) saveState(state);
+  }, [state, ready]);
+
+  // pull the saved days, settings and people from the database once, and upload anything only this browser has
+  useEffect(() => {
+    if (!hydrated || !cloud) return;
+    let cancelled = false;
+    (async () => {
+      const today = operatingDate(new Date());
+      const [days, settings, team] = await Promise.all([loadRecentDays(addDays(today, -14)), loadSettings(), loadTeam()]);
+      if (cancelled) return;
+      setState((prev) => {
+        const merged = settings ? mergeSettings(settings) : prev.settings;
+        const next: AppState = { ...prev, settings: merged, team: team.length ? team : prev.team ?? [] };
+        const out: Record<string, DayState> = { ...prev.days };
+        for (const [d, v] of Object.entries(days)) {
+          out[d] = refresh(v, next);
+          savedDays.current[d] = JSON.stringify(v);
+        }
+        if (settings) savedSettings.current = JSON.stringify(settings);
+        return { ...next, days: out, names: Array.from(new Set([...prev.names, ...team.map((t) => t.name)])) };
+      });
+      setCloudReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, cloud]);
+
+  // a day that is not loaded yet (an older date picked from the date box or History)
+  useEffect(() => {
+    if (!cloud || !cloudReady || stateRef.current.days[date]) return;
+    let cancelled = false;
+    void loadDay(date).then((d) => {
+      if (cancelled || !d) return;
+      savedDays.current[date] = JSON.stringify(d);
+      setState((prev) => ({ ...prev, days: { ...prev.days, [date]: refresh(d, prev) } }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cloud, cloudReady, date]);
+
+  // save changed days and settings to the database a moment after the last change
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    const t = window.setTimeout(async () => {
+      for (const [d, v] of Object.entries(state.days)) {
+        if (!v.shifts.length && !(v.checks ?? []).length && savedDays.current[d] == null) continue;
+        const json = JSON.stringify(v);
+        if (savedDays.current[d] === json) continue;
+        if (await saveDay(v, profile.id)) savedDays.current[d] = json;
+      }
+      const sj = JSON.stringify(state.settings);
+      if (savedSettings.current !== sj && (await saveSettings(state.settings))) savedSettings.current = sj;
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [state.days, state.settings, cloud, cloudReady, profile.id]);
+
+  // break starts and stops pressed on staff phones land here
+  useEffect(() => {
+    if (!cloud || !cloudReady) return;
+    let running = false;
+    const apply = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const events = await loadOpenEvents();
+        if (!events.length) return;
+        const notes: string[] = [];
+        setState((prev) => {
+          const days = { ...prev.days };
+          for (const e of events) {
+            const d = days[e.date];
+            const sh = d?.shifts.find((x) => x.id === e.shift_id);
+            const br = sh?.breaks.find((x) => x.id === e.break_id);
+            if (!d || !sh || !br) continue;
+            if (e.kind === "start" && br.start == null) {
+              days[e.date] = refresh(startBreak(d, sh.id, br.id, e.at), prev);
+              notes.push(sh.name + " started a break at " + fmt(e.at));
+            } else if (e.kind === "end" && br.start != null && br.end == null) {
+              days[e.date] = refresh(endBreak(d, sh.id, br.id, e.at), prev);
+              notes.push(sh.name + " ended their break at " + fmt(e.at));
+            }
+          }
+          return { ...prev, days };
+        });
+        await markApplied(events.map((e) => e.id));
+        if (notes.length) flash(notes.join(" · "));
+      } finally {
+        running = false;
+      }
+    };
+    void apply();
+    const stop = listenForEvents(() => void apply());
+    const poll = window.setInterval(() => void apply(), 30000);
+    return () => {
+      stop();
+      window.clearInterval(poll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloud, cloudReady]);
 
   // tick the real clock
   useEffect(() => {
@@ -116,6 +236,25 @@ export default function App() {
     setState((prev) => ({ ...prev, names: rememberName(prev.names, name) }));
   }, []);
 
+  const saveMember = useCallback(
+    (m: TeamMember) => {
+      setState((prev) => {
+        const team = [...(prev.team ?? []).filter((x) => x.id !== m.id), m].sort((a, b) => a.name.localeCompare(b.name));
+        return { ...prev, team, names: rememberName(prev.names, m.name) };
+      });
+      if (cloud) void cloudSaveMember(m);
+    },
+    [cloud],
+  );
+
+  const removeMember = useCallback(
+    (id: string) => {
+      setState((prev) => ({ ...prev, team: (prev.team ?? []).filter((x) => x.id !== id) }));
+      if (cloud) void cloudDeleteMember(id);
+    },
+    [cloud],
+  );
+
   const undo = useCallback(() => {
     const current = stateRef.current.days[date] ?? emptyDay(date);
     const { history, state: snap } = stepBack(histRef.current[date] ?? emptyHistory<DayState>(), current, sameDay);
@@ -158,8 +297,23 @@ export default function App() {
   }, [undo, redo]);
 
   const ctx: Ctx = useMemo(
-    () => ({ state, day, settings: state.settings, now, live: live && preview == null, mutate, setSettings, remember, flash, askCover: setCoverPrompt }),
-    [state, day, now, live, preview, mutate, setSettings, remember, flash],
+    () => ({
+      state,
+      day,
+      settings: state.settings,
+      now,
+      live: live && preview == null,
+      mutate,
+      setSettings,
+      remember,
+      flash,
+      askCover: setCoverPrompt,
+      cloud,
+      team: state.team ?? [],
+      saveMember,
+      removeMember,
+    }),
+    [state, day, now, live, preview, mutate, setSettings, remember, flash, cloud, saveMember, removeMember],
   );
 
   // gentle reminder when it has been a while since the last bathroom check; "Later" hides it for 30 minutes
@@ -171,7 +325,7 @@ export default function App() {
     0,
   );
 
-  if (!hydrated) {
+  if (!ready) {
     return (
       <div className="shell">
         <div className="topbar">
@@ -197,6 +351,14 @@ export default function App() {
         </div>
 
         <div className="tools">
+        <div className="acct no-print">
+          <span>
+            <b>{profile.name || profile.email}</b> · {ROLE_LABEL[profile.role]}
+          </span>
+          <button className="btn ghost small" onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
         <div className="undo-group" role="group" aria-label="Undo and redo">
           <button
             className="btn"
@@ -281,6 +443,7 @@ export default function App() {
             ["board", "Board", null],
             ["breaks", "Breaks", day.shifts.length ? remaining : null],
             ["checks", "Checks", null],
+            ...(cloud ? ([["history", "History", null]] as [Tab, string, number | null][]) : []),
             ["team", "Team", day.shifts.length || null],
           ] as [Tab, string, number | null][]
         ).map(([id, label, count]) => (
@@ -337,6 +500,15 @@ export default function App() {
         {tab === "board" && <BoardTab ctx={ctx} goTeam={() => setTab("team")} />}
         {tab === "checks" && <ChecksTab ctx={ctx} />}
         {tab === "breaks" && <BreaksTab ctx={ctx} goTeam={() => setTab("team")} />}
+        {tab === "history" && (
+          <HistoryTab
+            ctx={ctx}
+            onOpen={(d) => {
+              setDate(d);
+              setTab("board");
+            }}
+          />
+        )}
         {tab === "team" && <TeamTab ctx={ctx} />}
       </main>
 

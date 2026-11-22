@@ -2693,3 +2693,153 @@ button,
 .step-head .opt {
   font-size: 0.78rem;
 }
+
+/* ---------- sign-in, staff side, account chip, history ---------- */
+.login {
+  max-width: 420px;
+  margin: 40px auto;
+  display: grid;
+  gap: 14px;
+  text-align: center;
+}
+
+.staff {
+  max-width: 560px;
+}
+
+.staff-now {
+  display: grid;
+  gap: 4px;
+  padding: 26px 20px;
+  border-radius: 18px;
+  text-align: center;
+  background: var(--navy-800);
+  border: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.staff-now small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.staff-now strong {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: 2.6rem;
+  line-height: 1.05;
+}
+
+.staff-now.tone-front { border-color: var(--green); }
+.staff-now.tone-front strong { color: var(--green); }
+.staff-now.tone-bar { border-color: #f5a623; }
+.staff-now.tone-bar strong { color: #f5a623; }
+.staff-now.tone-dungeon { border-color: #a98bff; }
+.staff-now.tone-dungeon strong { color: #a98bff; }
+.staff-now.tone-break { border-color: var(--break); }
+.staff-now.tone-break strong { color: var(--break); }
+.staff-now.tone-moving strong { color: var(--break); }
+.staff-now.tone-none strong { color: var(--muted); font-size: 1.6rem; }
+
+.staff-next {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.staff-next small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.staff-next span {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.staff-bump {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--green);
+  color: var(--navy-900);
+  margin-bottom: 14px;
+  font-size: 1.05rem;
+}
+
+.staff-breaks {
+  display: grid;
+  gap: 12px;
+}
+
+.staff-break {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.staff-break > div {
+  display: grid;
+}
+
+.staff-break span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.staff-break.done {
+  opacity: 0.7;
+}
+
+.acct {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.acct b {
+  color: var(--text);
+}
+
+.hist-day {
+  display: grid;
+  gap: 6px;
+}
+
+.hist-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hist-people {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.people-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(160px, 1.4fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 700px) {
+  .people-row {
+    grid-template-columns: 1fr;
+  }
+}
