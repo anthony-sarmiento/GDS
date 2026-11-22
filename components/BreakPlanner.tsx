@@ -32,7 +32,7 @@ export default function BreakPlanner({ ctx }: { ctx: Ctx }) {
   return (
     <div className="card screen-only planner" style={{ marginTop: 16 }}>
       <div className="section-title" style={{ marginTop: 0 }}>
-        <h2>Break times they asked for</h2>
+        <h2>Break planner</h2>
         <span className="spacer" />
         <button className="btn primary" disabled={asked === 0} onClick={() => setOpen(true)}>
           Plan breaks
