@@ -9,6 +9,7 @@ import { applyBreakChange } from "@/lib/cover";
 import { breakImpact } from "@/lib/rotation";
 import { addBreak, endBreak, removeBreak, resetBreak, startBreak, updateBreak } from "@/lib/store";
 import { alignAfter, fmt, fmtDuration, fromInput, prettyDate, toInput } from "@/lib/time";
+import Icon from "./Icon";
 
 const byClockIn = (a: Shift, b: Shift) => a.start - b.start || a.name.localeCompare(b.name);
 
@@ -419,7 +420,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
             })
           }
         >
-          ✕
+          <Icon name="x" size={14} />
         </button>
         {last && (
           <button className="btn ghost small" title="Add another break" onClick={() => mutate((d) => addBreak(d, shift.id))}>

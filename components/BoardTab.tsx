@@ -4,12 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Ctx, FIRST_NAME } from "./ctx";
 import { runBreakChange } from "./breakFlow";
 import AssignDialog from "./AssignDialog";
+import Icon from "./Icon";
+import Avatar from "./Avatar";
 import { Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { breakStatus, effectiveStart } from "@/lib/breaks";
 import { applyBreakChange } from "@/lib/cover";
 import {
+  breakAtCell,
   breakImpact,
   breakSpan,
+  cellAt,
+  cellKey,
   cellsFor,
   coverageRuns,
   hasPositionAt,
@@ -85,16 +90,21 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
   }
 
   return (
-    <div>
-      <div className="quick-actions no-print">
+    <div className="board-grid">
+      <div className="quick-actions no-print area-assign">
         <button className="btn primary big" onClick={() => setAssignFor({})}>
           Assign
         </button>
       </div>
 
-      {now != null && <NowPanel ctx={ctx} onBump={bump} onAssign={(id) => setAssignFor({ shiftId: id })} />}
-      {now != null && <BreakQueue ctx={ctx} onSend={(id) => setAssignFor({ shiftId: id, where: "break" })} />}
+      <div className="area-now">
+        {now != null && <NowPanel ctx={ctx} onBump={bump} onAssign={(id) => setAssignFor({ shiftId: id })} />}
+      </div>
+      <div className="area-breaks">
+        {now != null && <BreakQueue ctx={ctx} onSend={(id) => setAssignFor({ shiftId: id, where: "break" })} />}
+      </div>
 
+      <div className="area-tl">
       <div className="section-title">
         <h2>Timeline</h2>
         <span className="spacer" />
@@ -127,11 +137,18 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
       )}
 
       <Timeline ctx={ctx} onBump={bump} onAssign={(id, at) => setAssignFor({ shiftId: id, at })} />
-
-      <div className="section-title">
-        <h2>Time at each position</h2>
       </div>
-      <Fairness ctx={ctx} />
+
+      <div className="area-fair">
+        <div className="section-title">
+          <h2>Time at each position</h2>
+        </div>
+        <Fairness ctx={ctx} />
+      </div>
+
+      <div className="area-today">
+        <TodayCard ctx={ctx} />
+      </div>
 
       {bumpFor && <BumpDialog ctx={ctx} outId={bumpFor} onClose={() => setBumpFor(null)} />}
       {assignFor && (
@@ -230,7 +247,7 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                 ))}
                 {out.map(({ shift, brk }) => (
                   <div className="person out" key={shift.id}>
-                    ☕ {shift.name} <small>back ~{fmtShort(brk.start! + brk.length)}</small>
+                    {shift.name} <small>on break · back ~{fmtShort(brk.start! + brk.length)}</small>
                   </div>
                 ))}
                 {(status === "open" || status === "short") && (
@@ -753,7 +770,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                         overRef.current = s.id;
                       }}
                     >
-                      ⋮⋮
+                      <Icon name="grip" size={14} />
                     </button>
                     <button
                       className="who-name link"
@@ -827,12 +844,12 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                           {st === "active"
                             ? "ON BREAK"
                             : st === "done"
-                              ? "✓"
+                              ? (w > 40 ? "Done" : "")
                               : w > 96
-                                ? `☕ ${fmtShort(sp[0])}–${fmtShort(sp[1])}`
+                                ? `Break ${fmtShort(sp[0])}–${fmtShort(sp[1])}`
                                 : w > 40
-                                  ? `☕ ${fmtShort(sp[0])}`
-                                  : "☕"}
+                                  ? fmtShort(sp[0])
+                                  : ""}
                         </span>
                       </div>
                     );
@@ -1050,5 +1067,75 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- today at a glance ---------- */
+
+/** Everyone on today with their picture, hours and where they are right now. */
+function TodayCard({ ctx }: { ctx: Ctx }) {
+  const { day, settings, now } = ctx;
+  const g = settings.gridMinutes;
+  const cols = cellsFor(day.shifts, settings);
+  const col = now != null ? cellAt(cols, g, now) : null;
+  const people = [...day.shifts].sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
+
+  const face = (name: string) => {
+    const m = ctx.team.find((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase());
+    return (m?.email ?? "")
+      .split(",")
+      .map((e) => ctx.avatars[e.trim().toLowerCase()])
+      .find(Boolean);
+  };
+
+  const status = (s: Shift): { text: string; cls: string } => {
+    if (s.sentHomeAt != null && (now == null || now >= s.sentHomeAt)) return { text: "Bumped out", cls: "done" };
+    if (s.role) return { text: roleName(s) || "Lead", cls: "lead" };
+    if (now == null) return { text: "", cls: "" };
+    if (now < s.start) return { text: `In at ${fmtShort(s.start)}`, cls: "later" };
+    if (now >= s.end) return { text: "Off", cls: "done" };
+    if (col != null && breakAtCell(s, col, g)) return { text: "On break", cls: "break" };
+    const cell = col != null ? day.cells[cellKey(s.id, col)] : undefined;
+    if (!cell) return { text: "No position", cls: "none" };
+    if (cell.transit) return { text: "Moving", cls: "break" };
+    if (cell.pos === "other") return { text: cell.label ?? "Custom", cls: cell.bump ? "bump" : "other" };
+    return { text: POSITION_LABEL[cell.pos], cls: cell.pos };
+  };
+
+  const checks = (day.checks ?? []).slice().sort((a, b) => b.time - a.time);
+  const working = people.filter((s) => !s.role && now != null && s.start <= now && now < s.end && s.sentHomeAt == null).length;
+
+  return (
+    <>
+      <div className="section-title">
+        <h2>Today</h2>
+        <span className="spacer" />
+        {now != null && <span className="muted">{working} working now</span>}
+      </div>
+      <div className="card today-card">
+        <div className="today-list">
+          {people.map((s) => {
+            const st = status(s);
+            return (
+              <div className="today-row" key={s.id}>
+                <Avatar url={face(s.name)} name={s.name} size={32} />
+                <div className="today-who">
+                  <b>{s.name || "(no name)"}</b>
+                  <small>
+                    {fmtShort(s.start)}–{fmtShort(s.scheduledEnd ?? s.end)}
+                  </small>
+                </div>
+                {st.text && <span className={`today-chip ${st.cls} pos-${st.cls}`}>{st.text}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="today-foot">
+          <span className="muted">Bathroom checks</span>
+          <b>{checks.length}</b>
+          <span className="muted">{checks.length ? `last at ${fmtShort(checks[0].time)}` : "none yet"}</span>
+        </div>
+      </div>
+    </>
   );
 }

@@ -663,3 +663,164 @@
     bottom: calc(92px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---------- desktop: use the width ---------- */
+.board-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "assign"
+    "now"
+    "breaks"
+    "tl"
+    "fair"
+    "today";
+}
+
+.board-grid > * {
+  min-width: 0;
+}
+
+.area-assign { grid-area: assign; }
+.area-now { grid-area: now; }
+.area-breaks { grid-area: breaks; }
+.area-tl { grid-area: tl; }
+.area-fair { grid-area: fair; }
+.area-today { grid-area: today; }
+
+@media (min-width: 1200px) {
+  .shell {
+    max-width: 1680px;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .board-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+    column-gap: 24px;
+    grid-template-areas:
+      "now    assign"
+      "now    breaks"
+      "tl     tl"
+      "fair   today";
+    align-items: start;
+  }
+
+  .area-assign {
+    margin-top: 28px;
+  }
+
+  .area-assign .btn.big {
+    min-height: 72px;
+  }
+
+  .area-breaks .section-title {
+    margin-top: 18px;
+  }
+
+  .now-grid {
+    min-height: 100%;
+  }
+}
+
+/* ---------- today card ---------- */
+.today-card {
+  padding: 8px 12px;
+}
+
+.today-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.today-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.today-row:last-child {
+  border-bottom: none;
+}
+
+.today-who {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.today-who b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-who small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.today-chip {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(140, 170, 255, 0.1);
+  border: 1px solid rgba(140, 170, 255, 0.16);
+}
+
+.today-chip.front,
+.today-chip.bar,
+.today-chip.dungeon {
+  color: var(--pos);
+  background: color-mix(in srgb, var(--pos) 14%, transparent);
+  border-color: color-mix(in srgb, var(--pos) 40%, transparent);
+}
+
+.today-chip.break {
+  color: var(--break);
+  background: rgba(92, 200, 255, 0.12);
+  border-color: rgba(92, 200, 255, 0.35);
+}
+
+.today-chip.bump {
+  color: var(--green);
+  border-color: rgba(70, 230, 60, 0.45);
+}
+
+.today-chip.other {
+  color: var(--other);
+}
+
+.today-chip.none {
+  color: var(--warn);
+}
+
+.today-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 4px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--edge-strong, var(--line));
+  font-size: 0.85rem;
+}
+
+.today-foot b {
+  font-size: 1.1rem;
+  color: var(--green);
+}
+
+.today-foot span:last-child {
+  margin-left: auto;
+}
+
+.icon {
+  display: inline-block;
+  vertical-align: -3px;
+  flex: 0 0 auto;
+}

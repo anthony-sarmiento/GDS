@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Avatar from "./Avatar";
+import Icon from "./Icon";
 import { loadMyDay, MyDay, pressBreak, pressBumpout } from "@/lib/cloud";
 import { Profile } from "@/lib/supabase";
 import { operatingDate, operatingMinutes, prettyDate, fmt, fmtDuration } from "@/lib/time";
@@ -304,7 +305,9 @@ export default function StaffApp({
                     {b.end != null && b.start != null ? ` · ${fmtDuration(b.end - b.start)}` : ""}
                   </span>
                 </div>
-                <span className="check">✓</span>
+                <span className="check">
+                  <Icon name="check" size={22} />
+                </span>
               </div>
             ))}
             {!breaks.length && <p className="muted">No breaks on your shift.</p>}

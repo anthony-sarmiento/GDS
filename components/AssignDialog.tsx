@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Ctx } from "./ctx";
 import CoverPicker from "./CoverPicker";
 import TimeSelect from "./TimeSelect";
+import Icon from "./Icon";
 import { CellPos, Position, POSITION_LABEL, Shift } from "@/lib/types";
 import { breakAtCell, cellAt, cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
 import { applyChain, ChainMove, peopleAt } from "@/lib/chain";
@@ -534,7 +535,7 @@ export default function AssignDialog({
                           setOpen(0);
                         }}
                       >
-                        ✕
+                        <Icon name="x" size={14} />
                       </button>
                     )}
                   </div>

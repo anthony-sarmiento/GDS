@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Avatar from "./Avatar";
+import Icon from "./Icon";
 import { Ctx } from "./ctx";
 import { LEAD_LABEL, LeadRole, Position, POSITIONS, POSITION_LABEL, roleName, Shift } from "@/lib/types";
 import { addShift, copyTeam, lastTeamBefore, removeShift, updateShift } from "@/lib/store";
@@ -283,7 +284,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
                 title="Remove from today"
                 onClick={() => mutate((d) => removeShift(d, s.id), { auto: true })}
               >
-                ✕
+                <Icon name="x" size={14} />
               </button>
             </div>
           ))}

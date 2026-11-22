@@ -51,6 +51,7 @@ import BreaksTab from "./BreaksTab";
 import TeamTab from "./TeamTab";
 import HistoryTab from "./HistoryTab";
 import AdminTab from "./AdminTab";
+import Icon from "./Icon";
 import ChecksTab, { ago } from "./ChecksTab";
 import { addCheck, checkStatus } from "@/lib/checks";
 
@@ -493,7 +494,7 @@ export default function App({
         <div className="acct no-print">
           {cloud && (
             <span className={`sync ${sync}`} role="status">
-              {sync === "saved" ? "✓ Saved" : sync === "saving" ? "Saving…" : "⚠ Not saved, retrying"}
+              {sync === "saved" ? "Saved" : sync === "saving" ? "Saving…" : "Not saved, retrying"}
             </span>
           )}
           <span>
@@ -514,7 +515,7 @@ export default function App({
             title="Undo the last change (Ctrl+Z)"
             aria-label="Undo"
           >
-            ↶ <span className="undo-text">Undo</span>
+            <Icon name="undo" /> <span className="undo-text">Undo</span>
           </button>
           <button
             className="btn ghost"
@@ -523,7 +524,7 @@ export default function App({
             title="Redo (Ctrl+Shift+Z)"
             aria-label="Redo"
           >
-            ↷ <span className="undo-text">Redo</span>
+            <Icon name="redo" /> <span className="undo-text">Redo</span>
           </button>
         </div>
 
@@ -615,9 +616,6 @@ export default function App({
 
       {showNudge && checks.since != null && (
         <div className="nudge no-print" role="status">
-          <span className="nudge-icon" aria-hidden>
-            🚻
-          </span>
           <p>
             {checks.never ? (
               <>
