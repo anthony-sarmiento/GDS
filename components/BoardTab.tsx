@@ -84,10 +84,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
     <div>
       <div className="quick-actions no-print">
         <button className="btn primary big" onClick={() => setAssignFor({})}>
-          Move or assign someone
-        </button>
-        <button className="btn big" onClick={() => setAssignFor({ where: "break" })}>
-          Send someone on break
+          Assign
         </button>
       </div>
 
@@ -96,7 +93,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
 
       <div className="section-title">
         <h2>Timeline</h2>
-        <p>Everyone's day at a glance. Tap a row or a name to move them. People stay where you put them until you move them.</p>
+        <p>Everyone's day at a glance. Tap a row or a name to assign them. People stay where you put them until you move them.</p>
         <span className="spacer" />
         <button
           className="btn ghost"
@@ -216,8 +213,8 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {s.floater && <span className="badge">Floater</span>}
                     {s.lock && <span className="badge">Stays</span>}
                     <small>out {fmtShort(s.end)}</small>
-                    <button className="btn ghost small" title={`Move ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
-                      Move
+                    <button className="btn ghost small" title={`Assign ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
+                      Assign
                     </button>
                     <button className="btn ghost small" title={`Send ${s.name} home`} onClick={() => onBump(s.id)}>
                       Send home
@@ -642,8 +639,8 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
       <p className="muted palette-hint" style={{ margin: 0 }}>
         {brush === "none" &&
           (compact
-            ? "Tap a row to move someone from that time, or tap a name."
-            : "Click a row to move someone from that time, or click a name. Use Paint by hand for exact ranges.")}
+            ? "Tap a row to assign someone from that time, or tap a name."
+            : "Click a row to assign someone from that time, or click a name. Use Paint by hand for exact ranges.")}
         {brush === "break" &&
           "Drag across a row to set the break's exact start and end. A click puts the break at that minute using its normal length."}
         {brush === "erase" && "Click a block to clear it, or drag for an exact range. Click a break to take it off the board."}
@@ -713,7 +710,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     <button
                       className="who-name link"
                       onClick={() => onAssign(s.id, Math.max(s.start, now ?? s.start))}
-                      title={`Move ${s.name} somewhere else, or on break`}
+                      title={`Assign ${s.name} somewhere else, or on break`}
                     >
                       {s.name || "(no name)"}
                     </button>

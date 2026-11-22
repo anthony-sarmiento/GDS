@@ -236,7 +236,7 @@ export default function AssignDialog({
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 6 }}>{isBreak ? "Send on break" : "Move or assign"}</h2>
+        <h2 style={{ marginBottom: 6 }}>Assign</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           {isBreak
             ? "Pick who, when and how long. If the position needs a cover, you choose who rotates over."

@@ -2504,10 +2504,12 @@ button,
 
 /* ---------- clearer board: quick actions, owed breaks, first-run steps ---------- */
 .quick-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
   margin-bottom: 18px;
+}
+
+.quick-actions .btn.big {
+  flex: 1;
 }
 
 .btn.big {
