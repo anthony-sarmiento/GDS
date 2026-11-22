@@ -77,6 +77,8 @@ export interface Cell {
   after?: string;
   /** Walking between spots: a few minutes when they are on neither. */
   transit?: boolean;
+  /** Last column of an assignment the lead gave an end time: nothing carries on after it. */
+  ends?: boolean;
 }
 
 /** One bathroom check. Anyone can do one, so `by` is optional. */

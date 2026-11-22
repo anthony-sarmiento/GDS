@@ -3,32 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Ctx } from "./ctx";
 import CoverPicker from "./CoverPicker";
-import RotateDialog from "./RotateDialog";
+import TimeSelect from "./TimeSelect";
 import { CellPos, Position, POSITION_LABEL } from "@/lib/types";
 import { cellKey, cellsFor, isPresent, rotating, staffAt } from "@/lib/rotation";
 import { analyzeCover, applyBreakChange, coverOptions } from "@/lib/cover";
 import { assignRange, paintCells, placeBreak } from "@/lib/store";
 import { loadLabels, pushLabel, saveLabels } from "@/lib/labels";
-import { alignAfter, fmt, fmtDuration, fromInput, toInput } from "@/lib/time";
+import { fmt, fmtDuration } from "@/lib/time";
 import { breakKind, breaksOwed, KIND_LABEL, onLog } from "@/lib/breaks";
 
 const round5 = (t: number) => Math.round(t / 5) * 5;
 
 type Where = CellPos | "break";
-
-/** Assign one person, or rotate several at once. */
-export function ModeSwitch({ mode, onChange }: { mode: "one" | "rotate"; onChange: (m: "one" | "rotate") => void }) {
-  return (
-    <div className="seg" role="group" aria-label="Kind of assignment">
-      <button type="button" aria-pressed={mode === "one"} onClick={() => onChange("one")}>
-        One person
-      </button>
-      <button type="button" aria-pressed={mode === "rotate"} onClick={() => onChange("rotate")}>
-        Rotation
-      </button>
-    </div>
-  );
-}
 
 const WHERE: { id: Where; label: string; cls: string }[] = [
   { id: "front", label: "Front", cls: "pos-front" },
@@ -65,7 +51,6 @@ export default function AssignDialog({
   const [who, setWho] = useState(firstShift?.id ?? "");
   const person = crew.find((s) => s.id === who) ?? firstShift;
 
-  const [mode, setMode] = useState<"one" | "rotate">("one");
   const [where, setWhere] = useState<Where>(startWhere ?? "front");
   const [label, setLabel] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
@@ -141,8 +126,6 @@ export default function AssignDialog({
   const showPicker = valid && position != null && (needsCover || isBreak);
   const effective = coverChoice === undefined && !needsCover ? null : coverChoice;
   const blocked = showPicker && needsCover && effective === undefined;
-
-  if (mode === "rotate") return <RotateDialog ctx={ctx} onClose={onClose} header={<ModeSwitch mode="rotate" onChange={setMode} />} />;
 
   if (!person) {
     return (
@@ -250,18 +233,17 @@ export default function AssignDialog({
         { label: "30 min", end: from + 30 },
         { label: "1 hr", end: from + 60 },
         { label: "2 hr", end: from + 120 },
-        { label: "Rest of shift", end: person.end },
+        { label: "Until bumpout", end: person.end },
       ];
 
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
       <div className="modal card assign" role="dialog" aria-modal="true" aria-label="Assign" onClick={(e) => e.stopPropagation()}>
         <h2 style={{ marginBottom: 10 }}>Assign</h2>
-        <ModeSwitch mode="one" onChange={setMode} />
 
         <div className="stack">
           <label className="lbl">
-            Who
+            <span className="step-head"><span className="step">1</span>Who are you moving?</span>
             <select className="field" value={who} onChange={(e) => changeWho(e.target.value)}>
               {crew.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -272,7 +254,9 @@ export default function AssignDialog({
           </label>
 
           <div>
-            <div className="lbl">Where</div>
+            <div className="step-head">
+              <span className="step">2</span>Where to?
+            </div>
             <div className="where-grid" role="group" aria-label="Where">
               {WHERE.map((w) => (
                 <button
@@ -326,38 +310,39 @@ export default function AssignDialog({
             </div>
           )}
 
+          <div className="step-head" style={{ marginBottom: -4 }}>
+            <span className="step">3</span>
+            {isBreak ? "When and how long?" : "For how long?"}
+            {!isBreak && <small className="opt">optional</small>}
+          </div>
           <div className="two">
             <label className="lbl">
               From
-              <input
-                type="time"
-                className="field"
-                value={toInput(from)}
-                onChange={(e) => {
-                  const v = fromInput(e.target.value);
-                  if (v != null) changeFrom(alignAfter(v, person.start));
-                }}
+              <TimeSelect
+                value={from}
+                min={person.start}
+                max={person.end - g}
+                label="From"
+                onChange={(m) => m != null && changeFrom(m)}
               />
             </label>
             <label className="lbl">
               Until
-              <input
-                type="time"
-                className="field"
-                value={toInput(until)}
-                onChange={(e) => {
-                  const v = fromInput(e.target.value);
-                  if (v != null) setUntil(Math.min(alignAfter(v, from), person.end));
-                }}
+              <TimeSelect
+                value={until}
+                min={from + g}
+                max={person.end}
+                label="Until"
+                onChange={(m) => m != null && setUntil(m)}
               />
             </label>
           </div>
           <div className="chip-row">
             {durations.map((d, i) => {
               const end = Math.min(d.end, person.end);
-              // only one chip lights up: "Rest of shift" when that is the chosen time, else the first that matches
+              // only one chip lights up: "Until bumpout" when that is the chosen time, else the first that matches
               const toEnd = until === person.end;
-              const active = d.label === "Rest of shift" ? toEnd : !toEnd && until === end && durations.findIndex((x) => Math.min(x.end, person.end) === end) === i;
+              const active = d.label === "Until bumpout" ? toEnd : !toEnd && until === end && durations.findIndex((x) => Math.min(x.end, person.end) === end) === i;
               return (
                 <button key={d.label} type="button" className="btn small" aria-pressed={active} onClick={() => setUntil(end)}>
                   {d.label}

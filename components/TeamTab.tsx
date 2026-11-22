@@ -264,7 +264,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <span className="muted" style={{ fontSize: "0.8rem" }}>
                 {fmtHours(hoursOf(s.start, s.end))} · {fmt(s.start)}–{fmt(s.end)}
-                {s.sentHomeAt != null && " · sent home"}
+                {s.sentHomeAt != null && " · bumped out"}
                 <br />
                 Breaks: {s.breaks.length ? s.breaks.map((b) => `${b.length}m`).join(" + ") : "none"}
                 {!s.breaksCustom && s.breaks.length === 0 ? ` (rule: ${breakSummary(s.start, s.end)})` : ""}

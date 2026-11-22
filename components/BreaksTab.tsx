@@ -209,7 +209,7 @@ function PrintLog({ day, shifts, opener, closer }: { day: DayState; shifts: Shif
               <td>{fmt(s.end)}</td>
               <td>{b?.empInitials}</td>
               <td>{b?.leadInitials}</td>
-              <td>{[b?.notes, s.sentHomeAt != null ? `Sent home ${fmt(s.sentHomeAt)}` : ""].filter(Boolean).join(" · ")}</td>
+              <td>{[b?.notes, s.sentHomeAt != null ? `Bumped out ${fmt(s.sentHomeAt)}` : ""].filter(Boolean).join(" · ")}</td>
             </tr>
           ))}
         </tbody>
@@ -274,7 +274,7 @@ function BreakRow({ ctx, shift, brk, first, last }: { ctx: Ctx; shift: Shift; br
             {POSITION_LABEL[impact.position]} drops to {impact.remaining} (needs {impact.min})
           </small>
         )}
-        {shift.sentHomeAt != null && <small>Sent home {fmt(shift.sentHomeAt)}</small>}
+        {shift.sentHomeAt != null && <small>Bumped out {fmt(shift.sentHomeAt)}</small>}
       </td>
       <td data-label="Clock in">{fmt(shift.start)}</td>
       <td data-label="Break length" className="len">

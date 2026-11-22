@@ -225,7 +225,8 @@ export function paintCells(
 
 /**
  * Push an assignment: send someone to a position (or a named custom spot) from one time until another.
- * The columns are pinned. After `until` the person stays where they were sent, unless something else is assigned.
+ * The columns are pinned. If `until` is before the end of their shift the assignment really ends there and
+ * nothing is assigned after it; otherwise they stay until their shift (their bumpout) ends.
  */
 export function assignRange(
   day: DayState,
@@ -245,6 +246,12 @@ export function assignRange(
   const moving = !!before && !before.transit && !(before.pos === pos && before.label === (label?.trim() || undefined));
   const walk = moving ? Math.min(transitColumns(settings), cols.length) : 0;
   let next = paintCells(day, shiftId, cols.slice(walk), pos, label);
+  // an end the lead chose is a real end: nothing carries on afterwards (unless it runs to the end of the shift)
+  const lastCol = cols[cols.length - 1];
+  if (pos !== "other" && lastCol != null && cols.length > walk && until < shift.end) {
+    const k = cellKey(shiftId, lastCol);
+    next = { ...next, cells: { ...next.cells, [k]: { ...next.cells[k], ends: true } } };
+  }
   if (walk > 0) {
     const cells = { ...next.cells };
     for (const c of cols.slice(0, walk)) cells[cellKey(shiftId, c)] = { pos: "other", label: "Moving", pinned: true, transit: true };

@@ -66,15 +66,19 @@ describe("nobody is given a position until the lead assigns it", () => {
     expect(autoFill(old, S)).toEqual({});
   });
 
-  it("a starting position stays until the lead moves the person", () => {
+  it("a position with no end stays until the bumpout; one with an end leaves the rest unassigned", () => {
     let day = team();
     const a = day.shifts[0];
-    day = assignRange(day, S, a.id, h(11), h(12), "front");
+    day = assignRange(day, S, a.id, h(11), a.end, "front");
     day = refresh(day, initialState());
     for (const t of [h(11), h(11, 55), h(12), h(14), h(16, 55)]) expect(day.cells[cellKey(a.id, t)]?.pos).toBe("front");
-    // only the first hour was assigned; the rest is carried on
-    expect(day.cells[cellKey(a.id, h(11, 30))]?.pinned).toBe(true);
-    expect(day.cells[cellKey(a.id, h(14))]?.pinned).toBe(false);
+    // given an hour only, nothing is assigned after it
+    const base = team();
+    const t0 = base.shifts[0];
+    const timed = refresh(assignRange(base, S, t0.id, h(11), h(12), "front"), initialState());
+    expect(timed.cells[cellKey(t0.id, h(11, 55))]?.pos).toBe("front");
+    expect(timed.cells[cellKey(t0.id, h(12))]).toBeUndefined();
+    expect(timed.cells[cellKey(t0.id, h(14))]).toBeUndefined();
     // somebody else was never assigned, so they stay empty
     expect(day.cells[cellKey(day.shifts[1].id, h(14))]).toBeUndefined();
   });
@@ -83,7 +87,7 @@ describe("nobody is given a position until the lead assigns it", () => {
     let day = team();
     const a = day.shifts[0];
     day = assignRange(day, S, a.id, h(11), h(13), "front");
-    day = assignRange(day, S, a.id, h(13), h(14), "bar");
+    day = assignRange(day, S, a.id, h(13), a.end, "bar");
     day = refresh(day, initialState());
     expect(day.cells[cellKey(a.id, h(12, 55))]?.pos).toBe("front");
     expect(day.cells[cellKey(a.id, h(13))]?.pos).toBe("bar");
@@ -93,11 +97,11 @@ describe("nobody is given a position until the lead assigns it", () => {
   it("a custom spot is temporary: afterwards they go back to where they were", () => {
     let day = team();
     const a = day.shifts[0];
-    day = assignRange(day, S, a.id, h(11), h(13), "dungeon");
+    day = assignRange(day, S, a.id, h(11), a.end, "dungeon");
     day = assignRange(day, S, a.id, h(13), h(14), "other", "Tournament");
     day = refresh(day, initialState());
     expect(day.cells[cellKey(a.id, h(13, 30))]?.pos).toBe("other");
-    expect(day.cells[cellKey(a.id, h(14, 5))]).toEqual({ pos: "dungeon", pinned: false });
+    expect(day.cells[cellKey(a.id, h(14, 5))]).toEqual({ pos: "dungeon", pinned: true });
   });
 
   it("someone who covers a break stays where they went, and the person on break takes their old spot", () => {
@@ -413,7 +417,9 @@ describe("pushed assignments", () => {
     day = assignRange(day, S, cam.id, h(14, 15), h(15, 5), "bar");
     // the first column is the walk from the Dungeon to the Bar
     expect(day.cells[cellKey(cam.id, h(14, 15))]).toEqual({ pos: "other", label: "Moving", pinned: true, transit: true });
-    for (const t of [h(14, 20), h(14, 30), h(15)]) expect(day.cells[cellKey(cam.id, t)]).toEqual({ pos: "bar", pinned: true });
+    for (const t of [h(14, 20), h(14, 30)]) expect(day.cells[cellKey(cam.id, t)]).toEqual({ pos: "bar", pinned: true });
+    // the last column carries the end of the assignment
+    expect(day.cells[cellKey(cam.id, h(15))]).toEqual({ pos: "bar", pinned: true, ends: true });
     expect(day.cells[cellKey(cam.id, h(14, 10))]).toEqual(before[cellKey(cam.id, h(14, 10))]);
     expect(day.cells[cellKey(cam.id, h(15, 5))]).toEqual(before[cellKey(cam.id, h(15, 5))]);
   });

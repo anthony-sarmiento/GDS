@@ -1354,6 +1354,14 @@ table.grid.tight {
   pointer-events: none;
 }
 
+/* nothing assigned: a faint, quiet block that sits back in the grid */
+.blk.gap {
+  background: rgba(148, 163, 214, 0.09);
+  border: 1px dashed rgba(148, 163, 214, 0.22);
+  box-shadow: none;
+  pointer-events: none;
+}
+
 .blk.brk {
   z-index: 4;
   top: 3px;
@@ -2561,27 +2569,6 @@ button,
 }
 
 /* ---------- break preferences, plan, rotation, walking ---------- */
-.seg {
-  display: inline-flex;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-
-.seg button {
-  background: var(--navy-800);
-  border: none;
-  padding: 8px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.seg button[aria-pressed="true"] {
-  background: var(--green);
-  color: var(--navy-900);
-}
-
 .pref-grid {
   display: grid;
   gap: 4px;
@@ -2646,63 +2633,6 @@ button,
   color: var(--warn);
 }
 
-.rot-list {
-  display: grid;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.rot-row {
-  display: grid;
-  grid-template-columns: minmax(70px, 1fr) 80px 16px minmax(0, 1.4fr);
-  align-items: center;
-  gap: 8px;
-  background: var(--navy-700);
-  border-left: 4px solid var(--pos);
-  border-radius: 8px;
-  padding: 6px 10px;
-}
-
-.rot-from {
-  color: var(--pos);
-  font-weight: 600;
-}
-
-.rot-row .field {
-  width: 100%;
-}
-
-.rot-counts {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.rot-count {
-  flex: 1;
-  text-align: center;
-  border: 1px solid var(--line);
-  border-top: 3px solid var(--pos);
-  border-radius: 8px;
-  padding: 6px;
-  font-size: 0.85rem;
-}
-
-.rot-count b {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.2rem;
-  margin-left: 4px;
-}
-
-.rot-count.warn {
-  background: rgba(255, 194, 71, 0.14);
-}
-
-.rot-count.bad {
-  background: rgba(255, 92, 108, 0.16);
-}
-
 .cov-blk.transit {
   background: rgba(92, 200, 255, 0.18);
   color: var(--break);
@@ -2725,4 +2655,41 @@ button,
   .pref-placed {
     grid-column: 1 / -1;
   }
+}
+
+/* numbered steps in the Assign menu */
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--navy-900);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.opt {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.step-head .step {
+  margin-right: 0;
+}
+
+.step-head .opt {
+  font-size: 0.78rem;
 }

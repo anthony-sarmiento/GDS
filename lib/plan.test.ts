@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planFromPreferences } from "./plan";
-import { afterRotation, applyRotation, floorAt, suggestRotation } from "./rotate";
-import { autoFill, breakAtCell, cellKey } from "./rotation";
+import { autoFill, cellKey } from "./rotation";
 import { addShift, assignRange, emptyDay, updateBreak } from "./store";
 import { DayState, DEFAULT_SETTINGS, Position } from "./types";
 
@@ -75,43 +74,18 @@ describe("planning breaks around what people asked for", () => {
   });
 });
 
-describe("rotating", () => {
-  it("suggests everyone moves to a different position and the headcount stays the same", () => {
-    const day = setUp();
-    const moves = suggestRotation(day, S, h(14));
-    expect(moves.every((m) => m.dest !== "stay")).toBe(true);
-    expect(afterRotation(day, S, h(14), moves)).toEqual({ front: 1, bar: 2, dungeon: 1 });
-  });
-
-  it("moves people with a short walk, then they stay there", () => {
-    const day = setUp();
+describe("an assignment with an end", () => {
+  it("leaves the person unassigned after it ends, and carries on when no end was given", () => {
+    const day = addShift(emptyDay("2026-11-17"), { name: "Alex", start: h(11), end: h(17), lock: null, floater: false });
     const alex = find(day, "Alex");
-    const next = applyRotation(day, S, h(14), [
-      { shiftId: alex.id, dest: "bar" },
-      { shiftId: find(day, "Cam").id, dest: "stay" },
-    ]);
-    expect(next.cells[cellKey(alex.id, h(14))]).toMatchObject({ transit: true });
-    expect(next.cells[cellKey(alex.id, h(14, 5))]?.pos).toBe("bar");
-    expect(next.cells[cellKey(alex.id, h(16))]?.pos).toBe("bar");
-    expect(next.cells[cellKey(alex.id, h(13, 55))]?.pos).toBe("front");
-    expect(next.cells[cellKey(find(day, "Cam").id, h(14))]?.pos).toBe("dungeon");
-  });
-
-  it("sends someone on break and, afterwards, to the spot of whoever took theirs", () => {
-    const day = setUp();
-    const next = applyRotation(day, S, h(14), [
-      { shiftId: find(day, "Alex").id, dest: "bar" }, // takes Bri's spot
-      { shiftId: find(day, "Bri").id, dest: "break" },
-      { shiftId: find(day, "Flo").id, dest: "front" }, // takes Alex's spot
-    ]);
-    const bri = find(next, "Bri");
-    expect(bri.breaks[0].planned).toBe(h(14));
-    expect(breakAtCell(bri, h(14, 10), 5)).toBeDefined();
-    const filled = { ...next, cells: autoFill(next, S) };
-    expect(filled.cells[cellKey(bri.id, h(13, 55))]?.pos).toBe("bar");
-    expect(filled.cells[cellKey(bri.id, h(14, 25))]?.pos).toBe("front"); // Alex's old spot
-    expect(filled.cells[cellKey(find(next, "Alex").id, h(15))]?.pos).toBe("bar");
-    expect(filled.cells[cellKey(find(next, "Flo").id, h(15))]?.pos).toBe("front");
-    expect(floorAt(filled, S, h(14, 10)).map((p) => p.shift.name).sort()).toEqual(["Alex", "Cam", "Flo"]);
+    // Alex goes to the Bar for an hour: afterwards nothing is assigned
+    const timed = assignRange(day, S, alex.id, h(14), h(15), "bar");
+    const a = autoFill(timed, S);
+    expect(a[cellKey(alex.id, h(14, 5))]?.pos).toBe("bar");
+    expect(a[cellKey(alex.id, h(14, 55))]?.pos).toBe("bar");
+    expect(a[cellKey(alex.id, h(15))]).toBeUndefined();
+    // with no end (until the bumpout / shift end) they simply stay
+    const open = assignRange(day, S, alex.id, h(14), alex.end, "bar");
+    expect(autoFill(open, S)[cellKey(alex.id, h(16))]?.pos).toBe("bar");
   });
 });

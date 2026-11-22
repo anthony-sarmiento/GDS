@@ -85,6 +85,7 @@ export function autoFill(day: DayState, settings: Settings): Record<string, Cell
       if (e && e.pinned && !(tie && !liveBreaks.has(tie))) {
         out[key] = e;
         if (e.pos !== "other" && !e.cover) last.set(s.id, e.pos);
+        if (e.ends) last.delete(s.id); // the assignment was given an end: nothing carries on after it
         continue;
       }
       const base = s.lock ?? last.get(s.id);
@@ -221,17 +222,27 @@ export interface PosRun {
   end: number;
 }
 
-/** One person's day as merged blocks: neighbouring columns on the same position become one block. */
-export function positionRuns(day: DayState, settings: Settings, shift: Shift): { runs: PosRun[]; pins: [number, number][] } {
+/** One person's day as merged blocks: neighbouring columns on the same position become one block. `gaps` are stretches with nothing assigned. */
+export function positionRuns(
+  day: DayState,
+  settings: Settings,
+  shift: Shift,
+): { runs: PosRun[]; pins: [number, number][]; gaps: [number, number][] } {
   const g = settings.gridMinutes;
   const runs: PosRun[] = [];
   const pins: [number, number][] = [];
+  const gaps: [number, number][] = [];
   for (const c of cellsFor(day.shifts, settings)) {
     if (!isPresent(shift, c, g)) continue;
     const cell = day.cells[cellKey(shift.id, c)];
-    if (!cell) continue;
     const start = Math.max(c, shift.start);
     const end = Math.min(c + g, shift.end);
+    if (!cell) {
+      const lg = gaps[gaps.length - 1];
+      if (lg && lg[1] === start) lg[1] = end;
+      else gaps.push([start, end]);
+      continue;
+    }
     const last = runs[runs.length - 1];
     if (last && last.pos === cell.pos && last.label === cell.label && last.end === start) last.end = end;
     else runs.push({ pos: cell.pos, label: cell.label, start, end });
@@ -241,7 +252,7 @@ export function positionRuns(day: DayState, settings: Settings, shift: Shift): {
       else pins.push([start, end]);
     }
   }
-  return { runs, pins };
+  return { runs, pins, gaps };
 }
 
 export interface CoverageRun {

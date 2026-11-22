@@ -209,8 +209,8 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     <button className="btn ghost small" title={`Assign ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
                       Assign
                     </button>
-                    <button className="btn ghost small" title={`Send ${s.name} home`} onClick={() => onBump(s.id)}>
-                      Send home
+                    <button className="btn ghost small" title={`Bump out ${s.name}`} onClick={() => onBump(s.id)}>
+                      Bumpout
                     </button>
                   </div>
                 ))}
@@ -679,7 +679,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           </div>
 
           {crew.map((s) => {
-            const { runs, pins } = positionRuns(day, settings, s);
+            const { runs, pins, gaps } = positionRuns(day, settings, s);
             const inDrag = drag?.shiftId === s.id;
             return (
               <div className="tl-row" key={s.id}>
@@ -696,10 +696,10 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                       <button
                         className="btn ghost small bump"
                         onClick={() => onBump(s.id)}
-                        title="Send home / hand off to the next shift"
-                        aria-label={`Send ${s.name} home`}
+                        title="Bumpout: hand their spot to the next person"
+                        aria-label={`Bump out ${s.name}`}
                       >
-                        {compact ? "⋯" : "Send home"}
+                        {compact ? "⋯" : "Bumpout"}
                       </button>
                     )}
                   </div>
@@ -708,13 +708,21 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     {s.floater ? " · floater" : ""}
                     {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
                     {needsPosition(day, settings, s) ? " · needs a position" : ""}
-                    {s.sentHomeAt != null ? ` · sent home${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
+                    {s.sentHomeAt != null ? ` · bumped out${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
                   </small>
                 </div>
                 <div className="tl-lane" style={{ width }} onPointerDown={(e) => down(e, s)} onClick={(e) => tap(e, s)}>
                   <div className="off" style={{ left: 0, width: Math.max(0, X(s.start)) }} />
                   <div className="off" style={{ left: X(s.end), width: Math.max(0, width - X(s.end)) }} />
 
+                  {gaps.map(([a, z]) => (
+                    <div
+                      key={`gap-${a}`}
+                      className="blk gap"
+                      style={{ left: X(a), width: (z - a) * ppm }}
+                      title={`${s.name}: nothing assigned ${fmt(a)}–${fmt(z)}`}
+                    />
+                  ))}
                   {runs.map((r) => (
                     <div
                       key={`${r.pos}-${r.start}`}
@@ -914,17 +922,17 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
     if (!leaving) return;
     const inc = crew.find((s) => s.id === incoming);
     mutate((d) => bumpOut(d, settings, leaving.id, incoming || null, time), { auto: true });
-    flash(`${leaving.name} out at ${fmt(time)}${inc ? ` · ${inc.name} takes over` : ""}`);
+    flash(`${leaving.name} bumped out at ${fmt(time)}${inc ? ` · ${inc.name} takes over` : ""}`);
     onClose();
   }
 
   return (
     <div className="modal-back" onClick={onClose} role="presentation">
-      <div className="modal card" role="dialog" aria-modal="true" aria-label="Send home" onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ marginBottom: 6 }}>Send home</h2>
+      <div className="modal card" role="dialog" aria-modal="true" aria-label="Bumpout" onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ marginBottom: 10 }}>Bumpout</h2>
         <div className="stack">
           <label className="lbl">
-            Sending home
+            Who is bumping out?
             <select className="field" value={leaver} onChange={(e) => setLeaver(e.target.value)}>
               {crew
                 .filter((s) => s.sentHomeAt == null)
@@ -948,9 +956,9 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
             />
           </label>
           <label className="lbl">
-            Taking over
+            Who takes their spot?
             <select className="field" value={incoming} onChange={(e) => pickIncoming(e.target.value)}>
-              <option value="">Nobody (just send them home)</option>
+              <option value="">Nobody (just clock them out)</option>
               {candidates.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} — in {fmtShort(s.start)}
@@ -965,7 +973,7 @@ function BumpDialog({ ctx, outId, onClose }: { ctx: Ctx; outId: string; onClose:
             Cancel
           </button>
           <button className="btn primary" onClick={confirm}>
-            {incoming ? "Send home and hand off" : "Send home"}
+            {incoming ? "Bump out and hand off" : "Bump out"}
           </button>
         </div>
       </div>
