@@ -41,7 +41,7 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
   return (
     <div>
       <div className="screen-only">
-        <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+        <div className="card break-sum">
           <div>
             <strong>
               {done} of {all.length}
@@ -68,10 +68,6 @@ export default function BreaksTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => voi
         <BreakPlanner ctx={ctx} />
 
         <div className="log-head card" style={{ marginTop: 16 }}>
-          <label className="lbl">
-            Date
-            <input className="field" value={day.date} readOnly />
-          </label>
           <label className="lbl">
             Opener
             <input

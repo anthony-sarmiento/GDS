@@ -105,12 +105,12 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
       </div>
 
       <div className="area-tl">
-      <div className="section-title">
-        <h2>Timeline</h2>
-        <span className="spacer" />
-        <button
-          className="btn ghost"
-          onClick={() => {
+        <Timeline
+          ctx={ctx}
+          leads={leads}
+          onBump={bump}
+          onAssign={(id, at) => setAssignFor({ shiftId: id, at })}
+          onClear={() => {
             mutate(
               (d) => ({
                 ...d,
@@ -121,22 +121,7 @@ export default function BoardTab({ ctx, goTeam }: { ctx: Ctx; goTeam: () => void
             );
             ctx.flash("Cleared every assignment");
           }}
-        >
-          Clear assignments
-        </button>
-      </div>
-
-      {leads.length > 0 && (
-        <div className="lead-strip">
-          {leads.map((s) => (
-            <span key={s.id} className="badge">
-              {roleName(s) || "Lead"} · {s.name || "?"} · {fmtShort(s.start)}–{fmtShort(s.end)}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <Timeline ctx={ctx} onBump={bump} onAssign={(id, at) => setAssignFor({ shiftId: id, at })} />
+        />
       </div>
 
       <div className="area-fair">
@@ -229,10 +214,14 @@ function NowPanel({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                 </header>
                 {working.map((s) => (
                   <div className="person" key={s.id}>
-                    {s.name}
-                    {s.floater && <span className="badge">Floater</span>}
-                    {s.lock && <span className="badge">Stays</span>}
-                    <small>{s.scheduledEnd != null && s.sentHomeAt == null ? "staying on" : `out ${fmtShort(s.end)}`}</small>
+                    <span className="person-id">
+                      {s.name}
+                      <small>
+                        {s.scheduledEnd != null && s.sentHomeAt == null ? "staying on" : `out ${fmtShort(s.end)}`}
+                        {s.floater && " · floater"}
+                        {s.lock && " · stays"}
+                      </small>
+                    </span>
                     <button className="btn ghost small" title={`Assign ${s.name} somewhere else, or on break`} onClick={() => onAssign(s.id)}>
                       Assign
                     </button>
@@ -300,18 +289,18 @@ function BreakQueue({ ctx, onSend }: { ctx: Ctx; onSend: (shiftId: string) => vo
     <div className="section">
       <div className="section-title">
         <h2>Breaks</h2>
+        {owed.length > 0 && (
+          <div className="owed no-print">
+            <span className="muted">Still owed</span>
+            {owed.map(({ s, b }) => (
+              <button key={b.id} className="chip" onClick={() => onSend(s.id)} title={`Send ${s.name} on break`}>
+                {s.name} <small>{b.length >= 30 ? "30–60" : b.length} min</small>
+              </button>
+            ))}
+          </div>
+        )}
+        {!items.length && <span className="muted no-breaks">None planned</span>}
       </div>
-      {owed.length > 0 && (
-        <div className="owed no-print">
-          <span className="muted">Still owed a break:</span>
-          {owed.map(({ s, b }) => (
-            <button key={b.id} className="chip" onClick={() => onSend(s.id)} title={`Send ${s.name} on break`}>
-              {s.name} <small>{b.length >= 30 ? "30–60" : b.length} min</small>
-            </button>
-          ))}
-        </div>
-      )}
-      {!items.length && <div className="card muted">No breaks planned.</div>}
       <div className="queue">
         {items.map(({ s, b, at }) => {
           const status = breakStatus(b);
@@ -386,7 +375,19 @@ interface Drag {
   max: number;
 }
 
-function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) => void; onAssign: (id: string, at: number) => void }) {
+function Timeline({
+  ctx,
+  leads,
+  onBump,
+  onAssign,
+  onClear,
+}: {
+  ctx: Ctx;
+  leads: Shift[];
+  onBump: (id: string) => void;
+  onAssign: (id: string, at: number) => void;
+  onClear: () => void;
+}) {
   const { day, settings, now, flash } = ctx;
   const g = settings.gridMinutes;
   const crew = rotating(day.shifts);
@@ -624,19 +625,56 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
 
   return (
     <div>
-      <div className="palette no-print" role="toolbar" aria-label="Timeline tools">
-        <button
-          className="btn small"
-          aria-expanded={tools}
-          onClick={() => {
-            setTools(!tools);
-            if (tools) setBrush("none");
-          }}
-          title="Paint exact ranges by hand with brushes"
-        >
-          {tools ? "Hide paint tools" : "Paint by hand"}
-        </button>
-        {tools && (
+      <div className="tl-bar no-print">
+        <h2>Timeline</h2>
+        {leads.map((s) => (
+          <span key={s.id} className="badge">
+            {roleName(s) || "Lead"} · {s.name || "?"} · {fmtShort(s.start)}–{fmtShort(s.end)}
+          </span>
+        ))}
+        <span className="spacer" />
+        <div className="tl-tools" role="toolbar" aria-label="Timeline tools">
+          <button className="btn ghost small" onClick={onClear}>
+            Clear assignments
+          </button>
+          <button
+            className="btn ghost small"
+            aria-expanded={tools}
+            onClick={() => {
+              setTools(!tools);
+              if (tools) setBrush("none");
+            }}
+            title="Paint exact ranges by hand with brushes"
+          >
+            {tools ? "Hide paint tools" : "Paint by hand"}
+          </button>
+          {now != null && (
+            <button className="btn small" onClick={jumpToNow} title="Scroll to the current time">
+              Now
+            </button>
+          )}
+          <div className="zoom-group" role="group" aria-label="Zoom">
+            <button
+              className="btn small"
+              disabled={ppm === ZOOMS[0]}
+              onClick={() => setPpm(ZOOMS[Math.max(0, ZOOMS.indexOf(ppm) - 1)])}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              className="btn small"
+              disabled={ppm === ZOOMS[ZOOMS.length - 1]}
+              onClick={() => setPpm(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(ppm) + 1)])}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+      {tools && (
+      <div className="palette no-print" role="toolbar" aria-label="Paint brushes">
           <button
             className="brush brush-pan"
             aria-pressed={brush === "none"}
@@ -645,8 +683,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           >
             Pan
           </button>
-        )}
-        {tools && BRUSHES.map((b) => (
+        {BRUSHES.map((b) => (
           <button
             key={b.id}
             className={`brush ${b.cls}`}
@@ -658,13 +695,14 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
             {b.label}
           </button>
         ))}
-        <span style={{ flex: 1 }} />
-        {now != null && (
-          <button className="btn small" onClick={jumpToNow} title="Scroll to the current time">
-            Now
-          </button>
-        )}
+        <button
+          className="btn ghost small"
+          onClick={() => flash("Keys: 1 Front · 2 Bar · 3 Dungeon · 4 Break · 0 Erase · Esc put the brush down")}
+        >
+          Shortcuts
+        </button>
       </div>
+      )}
       {brush === "other" && (
         <div className="custom-row no-print">
           <input
@@ -692,28 +730,6 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           )}
         </div>
       )}
-      <div className="board-sub">
-        <div className="zoom-group" role="group" aria-label="Zoom">
-          <span className="muted zoom-label">Zoom</span>
-          <button
-            className="btn small"
-            disabled={ppm === ZOOMS[0]}
-            onClick={() => setPpm(ZOOMS[Math.max(0, ZOOMS.indexOf(ppm) - 1)])}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
-          <button
-            className="btn small"
-            disabled={ppm === ZOOMS[ZOOMS.length - 1]}
-            onClick={() => setPpm(ZOOMS[Math.min(ZOOMS.length - 1, ZOOMS.indexOf(ppm) + 1)])}
-            aria-label="Zoom in"
-          >
-            +
-          </button>
-        </div>
-      </div>
-
       <div ref={scroller} className={`scroll board ${brush !== "none" ? "painting" : ""}`} data-brush={brushDef?.id}>
         <div
           className="tl"
@@ -744,14 +760,14 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
           </div>
 
           {crew.map((s) => {
-            const { runs, pins, gaps } = positionRuns(day, settings, s);
+            const { runs, gaps } = positionRuns(day, settings, s);
             const inDrag = drag?.shiftId === s.id;
             const idx = crew.findIndex((x) => x.id === s.id);
             const from = moving ? crew.findIndex((x) => x.id === moving) : -1;
             const drop = moving && overId === s.id && moving !== s.id ? (idx > from ? "drop-after" : "drop-before") : "";
             return (
               <div
-                className={`tl-row ${moving === s.id ? "row-moving" : ""} ${drop}`}
+                className={`tl-row ${s.sentHomeAt != null ? "row-out" : ""} ${moving === s.id ? "row-moving" : ""} ${drop}`}
                 key={s.id}
                 ref={(el) => {
                   rowEls.current[s.id] = el;
@@ -781,7 +797,7 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                     </button>
                     {s.end > (now ?? s.start) && (
                       <button
-                        className="btn ghost small bump"
+                        className={`btn small bump ${s.bumpoutAt != null ? "primary" : "ghost"}`}
                         onClick={() => onBump(s.id)}
                         title="Bumpout: hand their spot to the next person"
                         aria-label={`Bump out ${s.name}`}
@@ -792,10 +808,10 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                   </div>
                   <small>
                     {fmtShort(s.start)}–{fmtShort(s.scheduledEnd ?? s.end)}
-                    {s.floater ? " · floater" : ""}
+                    {s.floater && s.sentHomeAt == null ? " · floater" : ""}
                     {s.lock ? ` · stays ${POSITION_LABEL[s.lock]}` : ""}
                     {needsPosition(day, settings, s) ? " · needs a position" : ""}
-                    {s.sentHomeAt != null ? ` · bumped out${s.bumpedBy ? `, ${FIRST_NAME(s.bumpedBy)} took over` : ""}` : ""}
+                    {s.sentHomeAt != null ? (s.bumpedBy ? ` · ${FIRST_NAME(s.bumpedBy)} took over` : " · bumped out") : ""}
                     {s.sentHomeAt == null && s.bumpoutAt != null ? " · bumpout" : ""}
                     {s.sentHomeAt == null && s.scheduledEnd != null ? " · staying on" : ""}
                   </small>
@@ -823,9 +839,6 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
                         {(r.end - r.start) * ppm > 46 ? blockName(r.pos, r.label) : blockName(r.pos, r.label)[0]}
                       </span>
                     </div>
-                  ))}
-                  {pins.map(([a, z]) => (
-                    <div key={`pin-${a}`} className="pin-strip" style={{ left: X(a), width: (z - a) * ppm }} />
                   ))}
 
                   {s.breaks.map((b) => {
@@ -909,28 +922,6 @@ function Timeline({ ctx, onBump, onAssign }: { ctx: Ctx; onBump: (id: string) =>
         </div>
       </div>
 
-      <div className="legend" style={{ marginTop: 10 }}>
-        {POSITIONS.map((p) => (
-          <span key={p} className={`pos-${p}`}>
-            <i />
-            {POSITION_LABEL[p]}
-          </span>
-        ))}
-        <span>
-          <i style={{ background: "var(--break)" }} />
-          Break (green = on break now)
-        </span>
-        <span>
-          <i style={{ background: "var(--text)", height: 3, marginTop: 4 }} />
-          Painted by hand
-        </span>
-        <button
-          className="btn ghost small"
-          onClick={() => flash("Keys: 1 Front · 2 Bar · 3 Dungeon · 4 Break · 0 Erase · Esc put the brush down")}
-        >
-          Shortcuts
-        </button>
-      </div>
     </div>
   );
 }
@@ -1078,7 +1069,9 @@ function TodayCard({ ctx }: { ctx: Ctx }) {
   const g = settings.gridMinutes;
   const cols = cellsFor(day.shifts, settings);
   const col = now != null ? cellAt(cols, g, now) : null;
-  const people = [...day.shifts].sort((a, b) => a.start - b.start || a.name.localeCompare(b.name));
+  const gone = (s: Shift) => now != null && (s.sentHomeAt != null ? now >= s.sentHomeAt : now >= s.end);
+  const rank = (s: Shift) => (gone(s) ? 2 : now != null && now < s.start ? 1 : 0);
+  const people = [...day.shifts].sort((a, b) => rank(a) - rank(b) || a.start - b.start || a.name.localeCompare(b.name));
 
   const face = (name: string) => {
     const m = ctx.team.find((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -1117,7 +1110,7 @@ function TodayCard({ ctx }: { ctx: Ctx }) {
           {people.map((s) => {
             const st = status(s);
             return (
-              <div className="today-row" key={s.id}>
+              <div className={`today-row ${gone(s) ? "gone" : ""}`} key={s.id}>
                 <Avatar url={face(s.name)} name={s.name} size={32} />
                 <div className="today-who">
                   <b>{s.name || "(no name)"}</b>

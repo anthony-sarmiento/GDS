@@ -598,6 +598,7 @@ export default function App({
 
       <div className="print-only print-title">GEEK&rsquo;D DAILY BREAK LOG</div>
 
+      <div className="subbar">
       <nav className="tabs" role="tablist" aria-label="Sections">
         {(
           [
@@ -623,9 +624,8 @@ export default function App({
         ))}
       </nav>
 
-      <p className="muted no-print" style={{ marginTop: -8, marginBottom: 16 }}>
-        {prettyDate(date)}
-      </p>
+      <p className="muted no-print day-name">{prettyDate(date)}</p>
+      </div>
 
       {showNudge && checks.since != null && (
         <div className="nudge no-print" role="status">

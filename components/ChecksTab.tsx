@@ -40,7 +40,8 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
   }
 
   return (
-    <div>
+    <div className="checks-grid">
+      <div>
       <div className="section-title" style={{ marginTop: 0 }}>
         <h2>Bathroom checks</h2>
       </div>
@@ -121,7 +122,9 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
           <span>longest gap</span>
         </div>
       </div>
+      </div>
 
+      <div>
       <div className="section-title">
         <h2>Today&rsquo;s checks</h2>
       </div>
@@ -150,6 +153,7 @@ export default function ChecksTab({ ctx }: { ctx: Ctx }) {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

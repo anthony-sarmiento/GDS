@@ -1,0 +1,887 @@
+/*
+ * Desktop polish, on top of theme.css. Flatter surfaces, one loud button at a time, and tools that
+ * share a line instead of stacking. Phones keep the look in theme.css.
+ */
+
+/* ---------- pieces both sizes use ---------- */
+.day-name {
+  margin: -8px 0 16px;
+}
+
+.person-id {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.person-id small {
+  margin-left: 0;
+}
+
+.tl-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 28px 0 12px;
+}
+
+.tl-bar .spacer {
+  flex: 1;
+}
+
+.tl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.no-breaks {
+  font-size: 0.9rem;
+}
+
+.break-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.team-head {
+  display: none;
+}
+
+.today-row.gone {
+  opacity: 0.5;
+}
+
+@media screen and (max-width: 700px) {
+  /* the subbar must not become a box around the fixed dock */
+  .subbar {
+    display: contents;
+  }
+
+  .tl-tools {
+    width: 100%;
+  }
+}
+
+@media screen and (min-width: 701px) {
+  :root {
+    --panel: rgba(16, 28, 80, 0.5);
+    --glass: var(--panel);
+    --lift: none;
+    --shine: none;
+    --glow-green: none;
+    --green-grad: #46e63c;
+    --radius: 14px;
+  }
+
+  body {
+    background:
+      radial-gradient(1100px 560px at 100% -10%, rgba(86, 120, 255, 0.14), transparent 62%),
+      radial-gradient(800px 460px at 0% -12%, rgba(70, 230, 60, 0.07), transparent 60%),
+      #050c2c;
+    background-attachment: fixed;
+  }
+
+  body::before {
+    content: none;
+  }
+
+  /* ---------- header ---------- */
+  .topbar {
+    margin: 0;
+    padding: 18px 0 14px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .brand img {
+    height: 54px;
+    filter: none;
+  }
+
+  .brand-text h1 {
+    font-size: 2rem;
+    filter: none;
+  }
+
+  .brand-text span {
+    letter-spacing: 0.16em;
+    font-size: 0.68rem;
+  }
+
+  .undo-text {
+    display: none;
+  }
+
+  .undo-group {
+    gap: 2px;
+  }
+
+  .undo-group .btn {
+    min-width: 38px;
+    padding: 0;
+    background: transparent;
+    border-color: transparent;
+    color: var(--muted);
+  }
+
+  .undo-group .btn:hover:not(:disabled) {
+    color: var(--text);
+    background: rgba(140, 170, 255, 0.1);
+  }
+
+  .datebar .btn.icon {
+    background: transparent;
+    border-color: transparent;
+    width: 32px;
+    font-size: 1.2rem;
+  }
+
+  .clock {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .clock .btn {
+    padding: 4px 6px;
+  }
+
+  /* the account goes last, set apart by a hairline */
+  .acct {
+    order: 9;
+    padding: 0 0 0 16px;
+    border: none;
+    border-left: 1px solid var(--edge);
+    border-radius: 0;
+    background: none;
+  }
+
+  .subbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .day-name {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .tabs {
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .tab {
+    padding: 12px 16px 13px;
+    border-radius: 10px 10px 0 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  .tab:hover {
+    background: rgba(140, 170, 255, 0.06);
+  }
+
+  .tab[aria-selected="true"] {
+    color: var(--text);
+    background: none;
+    border-bottom-color: var(--green);
+  }
+
+  .tab[aria-selected="true"] .count {
+    background: rgba(140, 170, 255, 0.16);
+    color: var(--text);
+  }
+
+  .tab .count.alert,
+  .tab[aria-selected="true"] .count.alert {
+    background: var(--warn);
+    color: var(--navy-900);
+  }
+
+  /* ---------- surfaces and headings ---------- */
+  .card,
+  .pos-card,
+  .stat,
+  .q-item,
+  .staff-breaks,
+  .staff-row {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .stat,
+  .q-item {
+    background: var(--panel);
+    border-top-color: var(--edge);
+    border-right-color: var(--edge);
+    border-bottom-color: var(--edge);
+  }
+
+  .stat {
+    border-left-color: var(--edge);
+  }
+
+  .q-item {
+    border-left-width: 3px;
+  }
+
+  .section-title {
+    align-items: center;
+    margin: 32px 0 12px;
+  }
+
+  .section-title h2,
+  .tl-bar h2 {
+    font-size: 1.15rem;
+    letter-spacing: 0.06em;
+  }
+
+  .section-title h2::before {
+    content: none;
+  }
+
+  .tl-bar {
+    margin-top: 32px;
+  }
+
+  /* ---------- controls: only the main action is loud ---------- */
+  .btn {
+    border-radius: 9px;
+    background: rgba(140, 170, 255, 0.1);
+    border-color: var(--edge);
+  }
+
+  .btn:hover:not(:disabled) {
+    background: rgba(140, 170, 255, 0.18);
+    transform: none;
+  }
+
+  .btn.primary {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .btn.primary:hover:not(:disabled) {
+    background: #66f25d;
+    box-shadow: none;
+  }
+
+  .field,
+  select.field,
+  input.field {
+    border-radius: 9px;
+    border-color: var(--edge);
+  }
+
+  .brush:hover {
+    transform: none;
+  }
+
+  .nudge {
+    padding: 8px 8px 8px 16px;
+    margin-bottom: 24px;
+    border-radius: 12px;
+    border-color: rgba(255, 194, 71, 0.28);
+    background: rgba(255, 194, 71, 0.07);
+    box-shadow: none;
+  }
+
+  .nudge .btn.primary {
+    background: rgba(255, 194, 71, 0.16);
+    color: var(--warn);
+  }
+
+  .nudge .btn.primary:hover:not(:disabled) {
+    background: rgba(255, 194, 71, 0.28);
+  }
+
+  /* ---------- right now ---------- */
+  .now-grid {
+    gap: 16px;
+  }
+
+  .pos-card,
+  .pos-card.open,
+  .pos-card.short,
+  .pos-card.walking {
+    min-height: 132px;
+    padding: 16px;
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    background: var(--panel);
+  }
+
+  .pos-card::before {
+    height: 3px;
+    background: var(--pos);
+    box-shadow: none;
+  }
+
+  .pos-card.open,
+  .pos-card.short {
+    border-color: rgba(255, 92, 108, 0.4);
+  }
+
+  .pos-card h3 {
+    font-size: 1.35rem;
+    text-shadow: none;
+  }
+
+  .pos-card header .muted {
+    font-size: 0.85rem;
+  }
+
+  .person {
+    padding: 8px 6px 8px 12px;
+    background: rgba(3, 8, 24, 0.32);
+    border: none;
+  }
+
+  .person .btn.ghost {
+    padding: 4px 8px;
+  }
+
+  /* ---------- breaks strip ---------- */
+  .area-breaks .section-title {
+    margin-top: 28px;
+  }
+
+  .owed {
+    margin: 0;
+  }
+
+  .chip {
+    background: rgba(140, 170, 255, 0.08);
+    border: 1px solid var(--edge);
+  }
+
+  /* ---------- timeline ---------- */
+  .scroll,
+  .scroll.board {
+    border-radius: 14px;
+    border: 1px solid var(--edge);
+    background: rgba(4, 10, 34, 0.4);
+    box-shadow: none;
+  }
+
+  .tl-label {
+    background: #0a1440;
+    border-right: 1px solid var(--edge);
+  }
+
+  .tl-head .tl-label,
+  .tl-lane.ruler,
+  .tl-sub .tl-label,
+  .tl-lane.sub {
+    background-color: #0d1849;
+  }
+
+  .tl-lane {
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 214, 0.18) 1px, transparent 1px),
+      linear-gradient(to right, rgba(148, 163, 214, 0.05) 1px, transparent 1px);
+  }
+
+  .tl-lane.ruler,
+  .tl-lane.sub {
+    background-image: none;
+  }
+
+  .tl-lane .off {
+    background: rgba(2, 6, 22, 0.55);
+  }
+
+  .tl-label small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .who-name.link {
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .who-name.link:hover {
+    text-decoration: underline;
+  }
+
+  .grip {
+    opacity: 0.35;
+  }
+
+  .tl-row:hover .grip {
+    opacity: 1;
+  }
+
+  .blk {
+    top: 9px;
+    bottom: 9px;
+    border-radius: 7px;
+    background: var(--pos);
+    box-shadow: none;
+    font-size: 0.7rem;
+  }
+
+  .blk.gap {
+    background: rgba(148, 163, 214, 0.07);
+    border: 1px dashed rgba(148, 163, 214, 0.16);
+  }
+
+  .blk.brk {
+    top: 6px;
+    bottom: 6px;
+    border-radius: 7px;
+    background: var(--break);
+    box-shadow: none;
+  }
+
+  .blk.brk.active {
+    background: var(--green);
+  }
+
+  .blk.brk.done {
+    background: #0d1849;
+  }
+
+  .tl-row.row-out .tl-label {
+    min-height: 40px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  .tl-row.row-out .tl-lane {
+    height: 40px;
+  }
+
+  .tl-row.row-out .who-line,
+  .tl-row.row-out small,
+  .tl-row.row-out .blk {
+    opacity: 0.5;
+  }
+
+  .tl-lane .cov-blk {
+    background: rgba(70, 230, 60, 0.07);
+    border-radius: 6px;
+  }
+
+  .tl-lane .cov-blk.none {
+    background: none;
+  }
+
+  .tl-lane .cov-blk.short,
+  .tl-lane .cov-blk.over {
+    background: rgba(255, 194, 71, 0.16);
+  }
+
+  .tl-lane .cov-blk.open {
+    background: rgba(255, 92, 108, 0.2);
+  }
+
+  .tl-lane .cov-blk.transit {
+    background: rgba(92, 200, 255, 0.14);
+  }
+
+  .now-line {
+    box-shadow: none;
+  }
+
+  /* ---------- time at each position, today ---------- */
+  .bar-track {
+    border-radius: 6px;
+  }
+
+  .today-card {
+    padding: 6px 16px;
+  }
+
+  .today-chip {
+    border-color: transparent !important;
+  }
+
+  .today-foot {
+    border-top: 1px solid var(--edge);
+  }
+
+  .avatar,
+  .avatar.init {
+    border: none;
+    box-shadow: none;
+    background: rgba(140, 170, 255, 0.14);
+    color: var(--text);
+  }
+
+  /* ---------- breaks tab ---------- */
+  .break-sum {
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .planner {
+    margin-top: 20px !important;
+  }
+
+  .log-head.card {
+    display: flex;
+    gap: 16px;
+    padding: 0;
+    border: none;
+    background: none;
+    margin-top: 28px !important;
+  }
+
+  .log-head label.lbl {
+    flex: 0 1 260px;
+  }
+
+  .log th {
+    background: #0d1849;
+  }
+
+  /* inputs in the log read as plain text until you point at them */
+  .log input.field {
+    border-color: transparent;
+    background: rgba(140, 170, 255, 0.07);
+  }
+
+  .log tr:hover input.field {
+    border-color: var(--edge);
+  }
+
+  .log input.field:focus {
+    border-color: var(--green);
+  }
+
+  /* ---------- team tab ---------- */
+  .team-head,
+  .team-row {
+    display: grid;
+    grid-template-columns: 36px minmax(160px, 1fr) 120px 120px 220px 150px 34px;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .team-head {
+    padding: 0 14px 8px 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .team-scroll {
+    margin: 0;
+    padding: 0;
+  }
+
+  .team-row {
+    padding: 8px 10px 8px 0;
+  }
+
+  .team-row .mini span {
+    display: none;
+  }
+
+  .team-row .field {
+    font-size: 0.88rem;
+  }
+
+  .team-row .team-name .field {
+    padding-left: 8px;
+    margin-left: -8px;
+    border-color: transparent;
+    background: transparent;
+    font-weight: 700;
+    font-size: 0.95rem;
+    height: 28px;
+    min-height: 28px;
+  }
+
+  .team-row:hover .team-name .field {
+    border-color: var(--edge);
+  }
+
+  .team-row .team-name .field:focus {
+    border-color: var(--green);
+    background: rgba(3, 8, 24, 0.55);
+  }
+
+  .team-row .badge.team-extra {
+    justify-self: start;
+  }
+}
+
+/* between a phone and a full desktop the team row drops its extras to a second line */
+@media screen and (min-width: 701px) and (max-width: 1000px) {
+  .team-head {
+    display: none;
+  }
+
+  .team-row {
+    grid-template-columns: 36px minmax(0, 1fr) 120px 120px 34px;
+  }
+
+  .team-row .mini span {
+    display: inline;
+  }
+
+  .team-row .team-x {
+    grid-column: 5;
+    grid-row: 1;
+  }
+
+  .team-row .team-works {
+    grid-column: 2 / 4;
+  }
+
+  .team-row .team-extra {
+    grid-column: 4 / 6;
+  }
+}
+
+@media screen and (min-width: 1000px) {
+  .board-grid {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+    column-gap: 24px;
+    grid-template-areas:
+      "now    now"
+      "breaks breaks"
+      "tl     tl"
+      "fair   today";
+    align-items: start;
+  }
+
+  /* Assign sits on the Right now line */
+  .board-grid > .area-assign {
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0;
+  }
+
+  .area-assign .btn.big {
+    min-width: 200px;
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 1.1rem;
+  }
+
+  .area-now {
+    min-height: 44px;
+  }
+
+  .area-now .section-title {
+    min-height: 44px;
+    margin-bottom: 14px;
+  }
+
+  .queue {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+
+  .pref-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 40px;
+  }
+
+  .pref-row {
+    grid-template-columns: minmax(110px, 1fr) 80px 120px 130px;
+  }
+
+  .checks-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .checks-grid .section-title {
+    margin-top: 0;
+  }
+
+  .team-bottom {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .team-bottom .card {
+    height: calc(100% - 68px);
+  }
+
+  .team-bottom .settings-grid:not(.staffing) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .staffing .row {
+    flex-wrap: nowrap;
+  }
+
+  .staffing .field.num {
+    width: 100%;
+    max-width: 84px;
+  }
+}
+
+@media screen and (min-width: 701px) {
+  .log td {
+    border-color: var(--edge);
+  }
+
+  .log tr.group-start td {
+    border-top-color: var(--edge);
+  }
+
+  .rules th {
+    background: #0d1849;
+  }
+}
+
+/* the place you pick in Assign fills with its own color (both sizes) */
+@media screen {
+  .modal.assign .where-grid .brush[aria-pressed="true"] {
+    background: var(--pos, var(--green));
+    border-color: var(--pos, var(--green));
+    color: #061208;
+    box-shadow: none;
+  }
+
+  .modal.assign .where-grid .brush-break {
+    --pos: var(--break);
+  }
+}
+
+@media screen and (min-width: 701px) {
+  .modal {
+    background: #0b1646;
+    border-color: var(--edge);
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+  }
+
+  .assign-foot {
+    background: #0b1646;
+    backdrop-filter: none;
+  }
+
+  .step {
+    box-shadow: none;
+  }
+
+  .chain-step {
+    box-shadow: none;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  /* name on its own line, then the times, then what they work as */
+  .team-row {
+    grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr) 40px;
+  }
+
+  .team-row .team-name {
+    grid-column: 2 / 4;
+  }
+
+  .team-row .team-x {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .team-row .mini:nth-of-type(1) {
+    grid-column: 2;
+  }
+
+  .team-row .mini .field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .team-row .team-works {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .team-row .team-extra {
+    grid-column: 3 / 5;
+  }
+
+  /* the narrow name column is for names; Bumpout is in Right now */
+  .who-line .bump {
+    display: none;
+  }
+
+  .tl-tools {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .tl-tools .btn.small {
+    padding: 6px 7px;
+    font-size: 0.76rem;
+  }
+
+  .tl-tools .zoom-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tl-tools .zoom-group .btn {
+    width: 36px;
+  }
+}
+
+/* .brush sets its own --pos, so the position has to be named here for the colors to show */
+@media screen {
+  .brush.pos-front {
+    --pos: var(--front);
+  }
+  .brush.pos-bar {
+    --pos: var(--bar);
+  }
+  .brush.pos-dungeon {
+    --pos: var(--dungeon);
+  }
+  .brush.pos-other {
+    --pos: var(--other);
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .team-row input[type="time"]::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
+  .team-row .team-works {
+    grid-column: 2 / 4;
+  }
+
+  .team-row .team-extra {
+    grid-column: 2 / 4;
+    justify-self: start;
+  }
+}

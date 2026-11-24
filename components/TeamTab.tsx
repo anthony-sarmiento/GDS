@@ -203,6 +203,15 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             Nobody on today yet.
           </div>
         )}
+        {day.shifts.length > 0 && (
+          <div className="team-head" aria-hidden>
+            <span />
+            <span>Name</span>
+            <span>In</span>
+            <span>Out</span>
+            <span>Works as</span>
+          </div>
+        )}
         <div className="team-scroll">
           {day.shifts.map((s) => (
             <div className="team-row" key={s.id}>
@@ -222,7 +231,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
                 </small>
               </div>
               <label className="mini">
-                In
+                <span>In</span>
                 <input
                   type="time"
                   className="field"
@@ -234,7 +243,7 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
                 />
               </label>
               <label className="mini">
-                Out
+                <span>Out</span>
                 <input
                   type="time"
                   className="field"
@@ -291,6 +300,8 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
         </div>
       </div>
 
+      <div className="team-bottom">
+      <div>
       <div className="section-title">
         <h2>Settings</h2>
       </div>
@@ -351,6 +362,8 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
         </label>
       </div>
 
+      </div>
+      <div>
       <div className="section-title">
         <h2>Staffing</h2>
       </div>
@@ -390,6 +403,8 @@ export default function TeamTab({ ctx }: { ctx: Ctx }) {
             </div>
           </div>
         ))}
+      </div>
+      </div>
       </div>
     </div>
   );
